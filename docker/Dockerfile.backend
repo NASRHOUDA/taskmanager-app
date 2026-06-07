@@ -1,0 +1,18 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copier les fichiers de dépendances
+COPY backend/package*.json ./
+
+# Installer les dépendances (npm install au lieu de npm ci)
+RUN npm install --production
+
+# Copier le reste du code backend
+COPY backend/ .
+
+# Exposer le port
+EXPOSE 5000
+
+# Démarrer l'application
+CMD ["node", "server.js"]

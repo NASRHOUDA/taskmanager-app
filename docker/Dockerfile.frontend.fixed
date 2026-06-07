@@ -1,0 +1,43 @@
+# Stage 1: Build
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copier les fichiers de dépendances
+COPY frontend/package*.json ./
+
+# Installer les dépendances
+RUN npm install
+
+# Copier tout le code source
+COPY frontend/ .
+
+# Build l'application
+RUN npm run build
+
+# Vérifier que le build a créé index.html
+RUN test -f /app/build/index.html && echo "✅ Build réussi" || (echo "❌ Build échoué - index.html manquant" && exit 1)
+
+# Stage 2: Production
+FROM nginx:alpine
+
+# Copier les fichiers build
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# Vérifier que les fichiers sont présents
+RUN test -f /usr/share/nginx/html/index.html && echo "✅ Fichiers copiés avec succès" || (echo "❌ Erreur: index.html non trouvé" && exit 1)
+
+# Configuration nginx simple sans boucle
+RUN echo 'server { \
+    listen 80; \
+    server_name localhost; \
+    root /usr/share/nginx/html; \
+    index index.html; \
+    location / { \
+        try_files $uri $uri/ /index.html =404; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
