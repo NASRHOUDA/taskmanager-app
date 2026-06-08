@@ -23,13 +23,33 @@ pipeline {
             steps {
                 checkout scm
                 echo '📦 Code récupéré depuis GitHub'
-                // Affiche la structure du repo pour debug
-                sh 'find . -maxdepth 3 -name "package.json" | head -20'
-                sh 'ls -la'
             }
         }
 
-        // ── SAST 1 : Gitleaks (--no-git pour éviter l'erreur git dans Docker) ──
+        // ── Installer Node.js dans le conteneur Jenkins ───────────────
+        // Jenkins tourne lui-même dans Docker, donc on installe Node.js
+        // directement dans l'agent au lieu de lancer un autre conteneur
+        stage('Setup Node.js') {
+            steps {
+                sh '''
+                    # Vérifie si node est déjà disponible
+                    if command -v node > /dev/null 2>&1; then
+                        echo "✅ Node.js déjà installé: $(node -v)"
+                    else
+                        echo "📦 Installation de Node.js..."
+                        apt-get update -qq
+                        apt-get install -y -qq curl
+                        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+                        apt-get install -y -qq nodejs
+                        echo "✅ Node.js installé: $(node -v)"
+                    fi
+                    node -v
+                    npm -v
+                '''
+            }
+        }
+
+        // ── SAST 1 : Gitleaks ─────────────────────────────────────────
         stage('Secret Scan - Gitleaks') {
             steps {
                 sh '''
@@ -42,6 +62,7 @@ pipeline {
                         --report-path=/path/gitleaks-report.sarif \
                         --verbose \
                     || echo "⚠️  Gitleaks: vérifier le rapport"
+                    ls -la gitleaks-report.sarif || echo "Rapport non généré"
                 '''
             }
             post {
@@ -63,6 +84,7 @@ pipeline {
                         --output=/src/semgrep-report.json \
                         /src \
                     || echo "⚠️  Semgrep: vérifier le rapport"
+                    ls -la semgrep-report.json || echo "Rapport non généré"
                 '''
             }
             post {
@@ -72,73 +94,30 @@ pipeline {
             }
         }
 
-        // ── Backend Install ───────────────────────────────────────────
+        // ── Backend Install (npm directement dans l'agent) ────────────
         stage('Backend Install') {
             steps {
-                sh '''
-                    # Détecte automatiquement où est le package.json backend
-                    if [ -f "backend/package.json" ]; then
-                        BACKEND_PATH="backend"
-                    elif [ -f "app/backend/package.json" ]; then
-                        BACKEND_PATH="app/backend"
-                    elif [ -f "server/package.json" ]; then
-                        BACKEND_PATH="server"
-                    elif [ -f "package.json" ]; then
-                        BACKEND_PATH="."
-                    else
-                        echo "❌ package.json backend introuvable"
-                        find . -name "package.json" -not -path "*/node_modules/*"
-                        exit 1
-                    fi
-                    echo "✅ Backend trouvé dans: $BACKEND_PATH"
-                    echo $BACKEND_PATH > .backend_path
-
-                    docker run --rm \
-                      -v $(pwd)/$BACKEND_PATH:/app \
-                      -w /app \
-                      node:20-alpine \
-                      npm install
-                '''
+                dir('backend') {
+                    sh 'npm install'
+                }
             }
         }
 
         // ── Frontend Install ──────────────────────────────────────────
         stage('Frontend Install') {
             steps {
-                sh '''
-                    if [ -f "frontend/package.json" ]; then
-                        FRONTEND_PATH="frontend"
-                    elif [ -f "app/frontend/package.json" ]; then
-                        FRONTEND_PATH="app/frontend"
-                    elif [ -f "client/package.json" ]; then
-                        FRONTEND_PATH="client"
-                    else
-                        echo "⚠️  package.json frontend introuvable - skip"
-                        exit 0
-                    fi
-                    echo "✅ Frontend trouvé dans: $FRONTEND_PATH"
-                    echo $FRONTEND_PATH > .frontend_path
-
-                    docker run --rm \
-                      -v $(pwd)/$FRONTEND_PATH:/app \
-                      -w /app \
-                      node:20-alpine \
-                      npm install
-                '''
+                dir('frontend') {
+                    sh 'npm install'
+                }
             }
         }
 
         // ── Tests unitaires Jest ──────────────────────────────────────
         stage('Unit Tests') {
             steps {
-                sh '''
-                    BACKEND_PATH=$(cat .backend_path 2>/dev/null || echo "backend")
-                    docker run --rm \
-                      -v $(pwd)/$BACKEND_PATH:/app \
-                      -w /app \
-                      node:20-alpine \
-                      sh -c "npm test -- --passWithNoTests --coverage --coverageReporters=lcov 2>&1 || echo '⚠️  Tests: vérifier les résultats'"
-                '''
+                dir('backend') {
+                    sh 'npm test -- --passWithNoTests --coverage --coverageReporters=lcov || echo "⚠️  Tests: vérifier les résultats"'
+                }
             }
             post {
                 always {
@@ -156,18 +135,13 @@ pipeline {
         // ── Tests BDD Cucumber ────────────────────────────────────────
         stage('BDD Tests - Cucumber') {
             steps {
-                sh '''
-                    BACKEND_PATH=$(cat .backend_path 2>/dev/null || echo "backend")
-                    docker run --rm \
-                      -v $(pwd)/$BACKEND_PATH:/app \
-                      -w /app \
-                      node:20-alpine \
-                      sh -c "npx --yes cucumber-js --format json:cucumber-report.json --format progress 2>&1 || echo '⚠️  Cucumber: vérifier les scénarios'"
-                '''
+                dir('backend') {
+                    sh 'npx --yes cucumber-js --format json:cucumber-report.json --format progress || echo "⚠️  Cucumber: pas de scénarios"'
+                }
             }
             post {
                 always {
-                    archiveArtifacts artifacts: '**/cucumber-report.json', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'backend/cucumber-report.json', allowEmptyArchive: true
                 }
             }
         }
@@ -177,11 +151,11 @@ pipeline {
             steps {
                 withSonarQubeEnv('SonarQube') {
                     sh '''
-                        BACKEND_PATH=$(cat .backend_path 2>/dev/null || echo "backend")
                         docker run --rm \
+                          --add-host=host.docker.internal:host-gateway \
                           -e SONAR_HOST_URL=$SONAR_HOST_URL \
                           -e SONAR_TOKEN=$SONAR_TOKEN \
-                          -v $(pwd)/$BACKEND_PATH:/usr/src \
+                          -v $(pwd)/backend:/usr/src \
                           sonarsource/sonar-scanner-cli \
                             -Dsonar.projectKey=taskmanager-backend \
                             -Dsonar.sources=. \
@@ -203,22 +177,12 @@ pipeline {
         // ── OWASP Dependency Check ────────────────────────────────────
         stage('OWASP Dependency Check') {
             steps {
-                sh '''
-                    BACKEND_PATH=$(cat .backend_path 2>/dev/null || echo "backend")
-                    docker run --rm \
-                      -v $(pwd)/$BACKEND_PATH:/app -w /app \
-                      node:20-alpine \
-                      sh -c "npm audit --audit-level=high --json > npm-audit-backend.json 2>&1 || echo '⚠️  Vulnérabilités backend'"
-                '''
-                sh '''
-                    FRONTEND_PATH=$(cat .frontend_path 2>/dev/null || echo "frontend")
-                    if [ -f "$FRONTEND_PATH/package.json" ]; then
-                        docker run --rm \
-                          -v $(pwd)/$FRONTEND_PATH:/app -w /app \
-                          node:20-alpine \
-                          sh -c "npm audit --audit-level=high --json > npm-audit-frontend.json 2>&1 || echo '⚠️  Vulnérabilités frontend'"
-                    fi
-                '''
+                dir('backend') {
+                    sh 'npm audit --audit-level=high --json > npm-audit-backend.json || echo "⚠️  Vulnérabilités backend"'
+                }
+                dir('frontend') {
+                    sh 'npm audit --audit-level=high --json > npm-audit-frontend.json || echo "⚠️  Vulnérabilités frontend"'
+                }
             }
             post {
                 always {
@@ -239,7 +203,7 @@ pipeline {
             }
         }
 
-        // ── Trivy : scan vulnérabilités images ────────────────────────
+        // ── Trivy ─────────────────────────────────────────────────────
         stage('Trivy Scan') {
             steps {
                 sh """
@@ -347,12 +311,11 @@ pipeline {
             echo '❌ Pipeline échoué!'
         }
         unstable {
-            echo '⚠️  Pipeline instable (tests en avertissement)'
+            echo '⚠️  Pipeline instable'
         }
         always {
             sh "docker rmi ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}  || true"
             sh "docker rmi ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} || true"
-            sh 'rm -f .backend_path .frontend_path || true'
         }
     }
 }
