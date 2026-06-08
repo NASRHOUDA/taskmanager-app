@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'master' }
+    agent any
     
     environment {
         DOCKER_REGISTRY = 'docker.io'
