@@ -23,10 +23,13 @@ pipeline {
             steps {
                 checkout scm
                 echo '📦 Code récupéré depuis GitHub'
+                // Affiche la structure du repo pour debug
+                sh 'find . -maxdepth 3 -name "package.json" | head -20'
+                sh 'ls -la'
             }
         }
 
-        // ── SAST 1 : Scan de secrets ──────────────────────────────────
+        // ── SAST 1 : Gitleaks (--no-git pour éviter l'erreur git dans Docker) ──
         stage('Secret Scan - Gitleaks') {
             steps {
                 sh '''
@@ -34,6 +37,7 @@ pipeline {
                       -v $(pwd):/path \
                       zricethezav/gitleaks:latest detect \
                         --source=/path \
+                        --no-git \
                         --report-format=sarif \
                         --report-path=/path/gitleaks-report.sarif \
                         --verbose \
@@ -47,7 +51,7 @@ pipeline {
             }
         }
 
-        // ── SAST 2 : Semgrep (analyse statique) ──────────────────────
+        // ── SAST 2 : Semgrep ──────────────────────────────────────────
         stage('SAST - Semgrep') {
             steps {
                 sh '''
@@ -68,12 +72,29 @@ pipeline {
             }
         }
 
-        // ── Installation Node.js via Docker (sans plugin NodeJS) ─────
+        // ── Backend Install ───────────────────────────────────────────
         stage('Backend Install') {
             steps {
                 sh '''
+                    # Détecte automatiquement où est le package.json backend
+                    if [ -f "backend/package.json" ]; then
+                        BACKEND_PATH="backend"
+                    elif [ -f "app/backend/package.json" ]; then
+                        BACKEND_PATH="app/backend"
+                    elif [ -f "server/package.json" ]; then
+                        BACKEND_PATH="server"
+                    elif [ -f "package.json" ]; then
+                        BACKEND_PATH="."
+                    else
+                        echo "❌ package.json backend introuvable"
+                        find . -name "package.json" -not -path "*/node_modules/*"
+                        exit 1
+                    fi
+                    echo "✅ Backend trouvé dans: $BACKEND_PATH"
+                    echo $BACKEND_PATH > .backend_path
+
                     docker run --rm \
-                      -v $(pwd)/backend:/app \
+                      -v $(pwd)/$BACKEND_PATH:/app \
                       -w /app \
                       node:20-alpine \
                       npm install
@@ -81,11 +102,25 @@ pipeline {
             }
         }
 
+        // ── Frontend Install ──────────────────────────────────────────
         stage('Frontend Install') {
             steps {
                 sh '''
+                    if [ -f "frontend/package.json" ]; then
+                        FRONTEND_PATH="frontend"
+                    elif [ -f "app/frontend/package.json" ]; then
+                        FRONTEND_PATH="app/frontend"
+                    elif [ -f "client/package.json" ]; then
+                        FRONTEND_PATH="client"
+                    else
+                        echo "⚠️  package.json frontend introuvable - skip"
+                        exit 0
+                    fi
+                    echo "✅ Frontend trouvé dans: $FRONTEND_PATH"
+                    echo $FRONTEND_PATH > .frontend_path
+
                     docker run --rm \
-                      -v $(pwd)/frontend:/app \
+                      -v $(pwd)/$FRONTEND_PATH:/app \
                       -w /app \
                       node:20-alpine \
                       npm install
@@ -97,17 +132,17 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 sh '''
+                    BACKEND_PATH=$(cat .backend_path 2>/dev/null || echo "backend")
                     docker run --rm \
-                      -v $(pwd)/backend:/app \
+                      -v $(pwd)/$BACKEND_PATH:/app \
                       -w /app \
                       node:20-alpine \
-                      npm test -- --passWithNoTests --coverage --coverageReporters=lcov \
-                    || echo "⚠️  Tests: vérifier les résultats"
+                      sh -c "npm test -- --passWithNoTests --coverage --coverageReporters=lcov 2>&1 || echo '⚠️  Tests: vérifier les résultats'"
                 '''
             }
             post {
                 always {
-                    junit allowEmptyResults: true, testResults: 'backend/junit.xml'
+                    junit allowEmptyResults: true, testResults: '**/junit.xml'
                     publishHTML(target: [
                         allowMissing: true,
                         reportDir: 'backend/coverage/lcov-report',
@@ -122,16 +157,17 @@ pipeline {
         stage('BDD Tests - Cucumber') {
             steps {
                 sh '''
+                    BACKEND_PATH=$(cat .backend_path 2>/dev/null || echo "backend")
                     docker run --rm \
-                      -v $(pwd)/backend:/app \
+                      -v $(pwd)/$BACKEND_PATH:/app \
                       -w /app \
                       node:20-alpine \
-                      sh -c "npx cucumber-js --format json:cucumber-report.json --format progress || echo '⚠️  Cucumber: vérifier les scénarios'"
+                      sh -c "npx --yes cucumber-js --format json:cucumber-report.json --format progress 2>&1 || echo '⚠️  Cucumber: vérifier les scénarios'"
                 '''
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'backend/cucumber-report.json', allowEmptyArchive: true
+                    archiveArtifacts artifacts: '**/cucumber-report.json', allowEmptyArchive: true
                 }
             }
         }
@@ -141,10 +177,11 @@ pipeline {
             steps {
                 withSonarQubeEnv('SonarQube') {
                     sh '''
+                        BACKEND_PATH=$(cat .backend_path 2>/dev/null || echo "backend")
                         docker run --rm \
                           -e SONAR_HOST_URL=$SONAR_HOST_URL \
                           -e SONAR_TOKEN=$SONAR_TOKEN \
-                          -v $(pwd)/backend:/usr/src \
+                          -v $(pwd)/$BACKEND_PATH:/usr/src \
                           sonarsource/sonar-scanner-cli \
                             -Dsonar.projectKey=taskmanager-backend \
                             -Dsonar.sources=. \
@@ -163,20 +200,24 @@ pipeline {
             }
         }
 
-        // ── OWASP Dependency Check (npm audit via Docker) ─────────────
+        // ── OWASP Dependency Check ────────────────────────────────────
         stage('OWASP Dependency Check') {
             steps {
                 sh '''
+                    BACKEND_PATH=$(cat .backend_path 2>/dev/null || echo "backend")
                     docker run --rm \
-                      -v $(pwd)/backend:/app -w /app \
+                      -v $(pwd)/$BACKEND_PATH:/app -w /app \
                       node:20-alpine \
-                      sh -c "npm audit --audit-level=high --json > npm-audit-backend.json || echo '⚠️  Vulnérabilités backend'"
+                      sh -c "npm audit --audit-level=high --json > npm-audit-backend.json 2>&1 || echo '⚠️  Vulnérabilités backend'"
                 '''
                 sh '''
-                    docker run --rm \
-                      -v $(pwd)/frontend:/app -w /app \
-                      node:20-alpine \
-                      sh -c "npm audit --audit-level=high --json > npm-audit-frontend.json || echo '⚠️  Vulnérabilités frontend'"
+                    FRONTEND_PATH=$(cat .frontend_path 2>/dev/null || echo "frontend")
+                    if [ -f "$FRONTEND_PATH/package.json" ]; then
+                        docker run --rm \
+                          -v $(pwd)/$FRONTEND_PATH:/app -w /app \
+                          node:20-alpine \
+                          sh -c "npm audit --audit-level=high --json > npm-audit-frontend.json 2>&1 || echo '⚠️  Vulnérabilités frontend'"
+                    fi
                 '''
             }
             post {
@@ -247,7 +288,7 @@ pipeline {
             }
         }
 
-        // ── Deploy Kubernetes (timeout corrigé + force image update) ──
+        // ── Deploy Kubernetes ─────────────────────────────────────────
         stage('Deploy to Kubernetes') {
             steps {
                 sh 'kubectl apply -f kubernetes/namespace.yaml           || true'
@@ -265,7 +306,7 @@ pipeline {
             }
         }
 
-        // ── DAST : OWASP ZAP (après déploiement) ─────────────────────
+        // ── DAST : OWASP ZAP ─────────────────────────────────────────
         stage('DAST - OWASP ZAP') {
             steps {
                 sh '''
@@ -311,6 +352,7 @@ pipeline {
         always {
             sh "docker rmi ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}  || true"
             sh "docker rmi ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} || true"
+            sh 'rm -f .backend_path .frontend_path || true'
         }
     }
 }
