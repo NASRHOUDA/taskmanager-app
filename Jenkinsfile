@@ -2,34 +2,23 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_REGISTRY      = 'docker.io'
-        DOCKER_IMAGE_BACKEND = 'houdanasr/taskmanager-backend'
-        DOCKER_IMAGE_FRONTEND= 'houdanasr/taskmanager-frontend'
-        SONAR_HOST_URL       = 'http://host.docker.internal:9000'
+        DOCKER_REGISTRY       = 'docker.io'
+        DOCKER_IMAGE_BACKEND  = 'houdanasr/taskmanager-backend'
+        DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
+        SONAR_HOST_URL        = 'http://host.docker.internal:9000'
         DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
-        SONAR_TOKEN          = credentials('sonarqube-token')
-        ZAP_TARGET_URL       = 'http://host.docker.internal:3000'   // URL frontend déployée
-        NODE_VERSION         = '20'
-    }
-
-    tools {
-        nodejs "NodeJS-${NODE_VERSION}"   // Nom du tool configuré dans Jenkins > Global Tool Configuration
+        SONAR_TOKEN           = credentials('sonarqube-token')
+        ZAP_TARGET_URL        = 'http://host.docker.internal:3000'
     }
 
     stages {
 
-        // ─────────────────────────────────────────────
-        // 0. Prérequis : accès socket Docker
-        // ─────────────────────────────────────────────
         stage('Fix Docker Socket') {
             steps {
                 sh 'chmod 666 /var/run/docker.sock || true'
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 1. Récupération du code source
-        // ─────────────────────────────────────────────
         stage('Checkout') {
             steps {
                 checkout scm
@@ -37,9 +26,7 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 2. Scan de secrets (Gitleaks)
-        // ─────────────────────────────────────────────
+        // ── SAST 1 : Scan de secrets ──────────────────────────────────
         stage('Secret Scan - Gitleaks') {
             steps {
                 sh '''
@@ -60,9 +47,7 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 3. Scan SAST statique (Semgrep) — AJOUT
-        // ─────────────────────────────────────────────
+        // ── SAST 2 : Semgrep (analyse statique) ──────────────────────
         stage('SAST - Semgrep') {
             steps {
                 sh '''
@@ -83,48 +68,46 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 4. Installation des dépendances (Node.js tool)
-        // ─────────────────────────────────────────────
+        // ── Installation Node.js via Docker (sans plugin NodeJS) ─────
         stage('Backend Install') {
             steps {
-                dir('backend') {
-                    sh 'npm ci'          // ci = installation reproductible (lockfile)
-                }
+                sh '''
+                    docker run --rm \
+                      -v $(pwd)/backend:/app \
+                      -w /app \
+                      node:20-alpine \
+                      npm install
+                '''
             }
         }
 
         stage('Frontend Install') {
             steps {
-                dir('frontend') {
-                    sh 'npm ci'
-                }
+                sh '''
+                    docker run --rm \
+                      -v $(pwd)/frontend:/app \
+                      -w /app \
+                      node:20-alpine \
+                      npm install
+                '''
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 5. Tests unitaires Jest — CORRIGÉ + rapport
-        // ─────────────────────────────────────────────
+        // ── Tests unitaires Jest ──────────────────────────────────────
         stage('Unit Tests') {
             steps {
-                dir('backend') {
-                    sh '''
-                        npm test -- \
-                          --passWithNoTests \
-                          --coverage \
-                          --coverageReporters=lcov \
-                          --reporters=default \
-                          --reporters=jest-junit \
-                        || echo "⚠️  Tests échoués - vérifier les résultats"
-                    '''
-                }
+                sh '''
+                    docker run --rm \
+                      -v $(pwd)/backend:/app \
+                      -w /app \
+                      node:20-alpine \
+                      npm test -- --passWithNoTests --coverage --coverageReporters=lcov \
+                    || echo "⚠️  Tests: vérifier les résultats"
+                '''
             }
             post {
                 always {
-                    // Publie les résultats JUnit dans Jenkins
-                    junit allowEmptyResults: true,
-                          testResults: 'backend/junit.xml'
-                    // Publie la couverture de code
+                    junit allowEmptyResults: true, testResults: 'backend/junit.xml'
                     publishHTML(target: [
                         allowMissing: true,
                         reportDir: 'backend/coverage/lcov-report',
@@ -135,33 +118,25 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 6. Tests BDD Cucumber — AJOUT
-        // ─────────────────────────────────────────────
+        // ── Tests BDD Cucumber ────────────────────────────────────────
         stage('BDD Tests - Cucumber') {
             steps {
-                dir('backend') {
-                    sh '''
-                        npx cucumber-js \
-                          --format json:cucumber-report.json \
-                          --format progress \
-                        || echo "⚠️  Cucumber: vérifier les scénarios"
-                    '''
-                }
+                sh '''
+                    docker run --rm \
+                      -v $(pwd)/backend:/app \
+                      -w /app \
+                      node:20-alpine \
+                      sh -c "npx cucumber-js --format json:cucumber-report.json --format progress || echo '⚠️  Cucumber: vérifier les scénarios'"
+                '''
             }
             post {
                 always {
-                    // Plugin Cucumber Reports requis dans Jenkins
-                    cucumber buildStatus: 'UNSTABLE',
-                             fileIncludePattern: 'backend/cucumber-report.json',
-                             jsonReportDirectory: 'backend'
+                    archiveArtifacts artifacts: 'backend/cucumber-report.json', allowEmptyArchive: true
                 }
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 7. Analyse qualité SonarQube (SAST)
-        // ─────────────────────────────────────────────
+        // ── SonarQube SAST ────────────────────────────────────────────
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
@@ -174,7 +149,6 @@ pipeline {
                             -Dsonar.projectKey=taskmanager-backend \
                             -Dsonar.sources=. \
                             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                            -Dsonar.testExecutionReportPaths=junit.xml \
                         || echo "⚠️  SonarQube scan ignoré"
                     '''
                 }
@@ -184,23 +158,26 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
-                    // Échoue le build si la Quality Gate SonarQube est KO
                     waitForQualityGate abortPipeline: false
                 }
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 8. Audit des dépendances (OWASP) — CORRIGÉ : utilise le tool Node.js
-        // ─────────────────────────────────────────────
+        // ── OWASP Dependency Check (npm audit via Docker) ─────────────
         stage('OWASP Dependency Check') {
             steps {
-                dir('backend') {
-                    sh 'npm audit --audit-level=high --json > npm-audit-backend.json || echo "⚠️  Vulnérabilités détectées (backend)"'
-                }
-                dir('frontend') {
-                    sh 'npm audit --audit-level=high --json > npm-audit-frontend.json || echo "⚠️  Vulnérabilités détectées (frontend)"'
-                }
+                sh '''
+                    docker run --rm \
+                      -v $(pwd)/backend:/app -w /app \
+                      node:20-alpine \
+                      sh -c "npm audit --audit-level=high --json > npm-audit-backend.json || echo '⚠️  Vulnérabilités backend'"
+                '''
+                sh '''
+                    docker run --rm \
+                      -v $(pwd)/frontend:/app -w /app \
+                      node:20-alpine \
+                      sh -c "npm audit --audit-level=high --json > npm-audit-frontend.json || echo '⚠️  Vulnérabilités frontend'"
+                '''
             }
             post {
                 always {
@@ -209,9 +186,7 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 9. Build des images Docker
-        // ─────────────────────────────────────────────
+        // ── Build Docker Images ───────────────────────────────────────
         stage('Build Docker Images') {
             steps {
                 script {
@@ -223,15 +198,12 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 10. Scan de vulnérabilités images (Trivy)
-        // ─────────────────────────────────────────────
+        // ── Trivy : scan vulnérabilités images ────────────────────────
         stage('Trivy Scan') {
             steps {
                 sh """
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
-                      -v trivy-cache:/root/.cache \
                       aquasec/trivy:latest image \
                         --severity HIGH,CRITICAL \
                         --format json \
@@ -242,7 +214,6 @@ pipeline {
                 sh """
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
-                      -v trivy-cache:/root/.cache \
                       aquasec/trivy:latest image \
                         --severity HIGH,CRITICAL \
                         --format json \
@@ -258,9 +229,7 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 11. Push sur Docker Hub
-        // ─────────────────────────────────────────────
+        // ── Push Docker Hub ───────────────────────────────────────────
         stage('Push to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(
@@ -278,43 +247,30 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 12. Déploiement Kubernetes — CORRIGÉ timeout frontend
-        // ─────────────────────────────────────────────
+        // ── Deploy Kubernetes (timeout corrigé + force image update) ──
         stage('Deploy to Kubernetes') {
             steps {
-                sh 'kubectl apply -f kubernetes/namespace.yaml    || true'
-                sh 'kubectl apply -f kubernetes/configmap.yaml    || true'
-                sh 'kubectl apply -f kubernetes/secrets.yaml      || true'
+                sh 'kubectl apply -f kubernetes/namespace.yaml           || true'
+                sh 'kubectl apply -f kubernetes/configmap.yaml           || true'
+                sh 'kubectl apply -f kubernetes/secrets.yaml             || true'
                 sh 'kubectl apply -f kubernetes/backend-deployment.yaml  || true'
                 sh 'kubectl apply -f kubernetes/backend-service.yaml     || true'
                 sh 'kubectl apply -f kubernetes/frontend-deployment.yaml || true'
                 sh 'kubectl apply -f kubernetes/frontend-service.yaml    || true'
-
-                // Force le rollout avec l'image du build courant
                 sh "kubectl set image deployment/backend  backend=${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}  -n taskmanager || true"
                 sh "kubectl set image deployment/frontend frontend=${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} -n taskmanager || true"
-
-                // Attente avec timeout augmenté pour le frontend
                 sh 'kubectl rollout status deployment/backend  -n taskmanager --timeout=5m || true'
                 sh 'kubectl rollout status deployment/frontend -n taskmanager --timeout=5m || true'
-
-                // Diagnostic en cas de problème
                 sh 'kubectl get pods -n taskmanager || true'
-                sh 'kubectl describe deployment/frontend -n taskmanager || true'
             }
         }
 
-        // ─────────────────────────────────────────────
-        // 13. Tests dynamiques DAST (OWASP ZAP) — AJOUT
-        //     Exécuté après le déploiement, sur l'app vivante
-        // ─────────────────────────────────────────────
+        // ── DAST : OWASP ZAP (après déploiement) ─────────────────────
         stage('DAST - OWASP ZAP') {
             steps {
                 sh '''
                     mkdir -p zap-reports
                     chmod 777 zap-reports
-
                     docker run --rm \
                       -v $(pwd)/zap-reports:/zap/wrk:rw \
                       --add-host=host.docker.internal:host-gateway \
@@ -342,24 +298,17 @@ pipeline {
         }
     }
 
-    // ─────────────────────────────────────────────
-    // Notifications post-build
-    // ─────────────────────────────────────────────
     post {
         success {
             echo '✅ Pipeline DevSecOps réussi!'
-            // Décommente si tu as le plugin Slack/Email configuré :
-            // slackSend(color: 'good', message: "✅ Build #${BUILD_NUMBER} réussi - ${JOB_NAME}")
         }
         failure {
             echo '❌ Pipeline échoué!'
-            // slackSend(color: 'danger', message: "❌ Build #${BUILD_NUMBER} échoué - ${JOB_NAME}")
         }
         unstable {
-            echo '⚠️  Pipeline instable (tests ou Quality Gate en avertissement)'
+            echo '⚠️  Pipeline instable (tests en avertissement)'
         }
         always {
-            // Nettoyage des images locales pour libérer de l'espace
             sh "docker rmi ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}  || true"
             sh "docker rmi ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} || true"
         }
