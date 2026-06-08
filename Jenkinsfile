@@ -3,14 +3,20 @@ pipeline {
     
     environment {
         DOCKER_REGISTRY = 'docker.io'
-        DOCKER_IMAGE_BACKEND = 'taskmanager-backend'
-        DOCKER_IMAGE_FRONTEND = 'taskmanager-frontend'
+        DOCKER_IMAGE_BACKEND = 'nasrhouda/taskmanager-backend'
+        DOCKER_IMAGE_FRONTEND = 'nasrhouda/taskmanager-frontend'
         SONAR_HOST_URL = 'http://host.docker.internal:9000'
         DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
         SONAR_TOKEN = credentials('sonarqube-token')
     }
     
     stages {
+        stage('Fix Docker Socket') {
+            steps {
+                sh 'chmod 666 /var/run/docker.sock || true'
+            }
+        }
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -43,9 +49,16 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    dir('backend') {
-                        sh 'sonar-scanner -Dsonar.projectKey=taskmanager-backend -Dsonar.sources=. -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$SONAR_TOKEN || echo "Sonar scan skipped"'
-                    }
+                    sh '''
+                        docker run --rm \
+                          -e SONAR_HOST_URL=$SONAR_HOST_URL \
+                          -e SONAR_TOKEN=$SONAR_TOKEN \
+                          -v $(pwd)/backend:/usr/src \
+                          sonarsource/sonar-scanner-cli \
+                          -Dsonar.projectKey=taskmanager-backend \
+                          -Dsonar.sources=. \
+                        || echo "Sonar scan skipped"
+                    '''
                 }
             }
         }
@@ -74,20 +87,24 @@ pipeline {
         
         stage('Trivy Scan') {
             steps {
-                sh "docker run --rm aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_IMAGE_BACKEND}:latest || true"
-                sh "docker run --rm aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_IMAGE_FRONTEND}:latest || true"
+                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_IMAGE_BACKEND}:latest || true"
+                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_IMAGE_FRONTEND}:latest || true"
             }
         }
         
         stage('Push to Docker Hub') {
             steps {
-                script {
-                    docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_HUB_CREDENTIALS) {
-                        sh "docker push ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}"
-                        sh "docker push ${DOCKER_IMAGE_BACKEND}:latest"
-                        sh "docker push ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER}"
-                        sh "docker push ${DOCKER_IMAGE_FRONTEND}:latest"
-                    }
+                withCredentials([usernamePassword(
+                    credentialsId: "${DOCKER_HUB_CREDENTIALS}",
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+                    sh "docker push ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}"
+                    sh "docker push ${DOCKER_IMAGE_BACKEND}:latest"
+                    sh "docker push ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER}"
+                    sh "docker push ${DOCKER_IMAGE_FRONTEND}:latest"
+                    sh "docker logout"
                 }
             }
         }
