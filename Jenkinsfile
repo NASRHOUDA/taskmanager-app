@@ -26,25 +26,28 @@ pipeline {
             }
         }
 
-        // ── Installer Node.js dans le conteneur Jenkins ───────────────
-        // Jenkins tourne lui-même dans Docker, donc on installe Node.js
-        // directement dans l'agent au lieu de lancer un autre conteneur
+        // ── Setup Node.js via nvm (sans droits root) ──────────────────
         stage('Setup Node.js') {
             steps {
                 sh '''
-                    # Vérifie si node est déjà disponible
-                    if command -v node > /dev/null 2>&1; then
-                        echo "✅ Node.js déjà installé: $(node -v)"
-                    else
-                        echo "📦 Installation de Node.js..."
-                        apt-get update -qq
-                        apt-get install -y -qq curl
-                        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-                        apt-get install -y -qq nodejs
-                        echo "✅ Node.js installé: $(node -v)"
+                    export NVM_DIR="$HOME/.nvm"
+
+                    # Installe nvm si absent
+                    if [ ! -f "$NVM_DIR/nvm.sh" ]; then
+                        echo "📦 Installation de nvm..."
+                        curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
                     fi
-                    node -v
-                    npm -v
+
+                    # Charge nvm
+                    . "$NVM_DIR/nvm.sh"
+
+                    # Installe Node 20 si absent
+                    nvm install 20
+                    nvm use 20
+                    nvm alias default 20
+
+                    echo "✅ Node: $(node -v)"
+                    echo "✅ npm:  $(npm -v)"
                 '''
             }
         }
@@ -62,7 +65,6 @@ pipeline {
                         --report-path=/path/gitleaks-report.sarif \
                         --verbose \
                     || echo "⚠️  Gitleaks: vérifier le rapport"
-                    ls -la gitleaks-report.sarif || echo "Rapport non généré"
                 '''
             }
             post {
@@ -84,7 +86,6 @@ pipeline {
                         --output=/src/semgrep-report.json \
                         /src \
                     || echo "⚠️  Semgrep: vérifier le rapport"
-                    ls -la semgrep-report.json || echo "Rapport non généré"
                 '''
             }
             post {
@@ -94,30 +95,41 @@ pipeline {
             }
         }
 
-        // ── Backend Install (npm directement dans l'agent) ────────────
+        // ── Backend Install ───────────────────────────────────────────
         stage('Backend Install') {
             steps {
-                dir('backend') {
-                    sh 'npm install'
-                }
+                sh '''
+                    export NVM_DIR="$HOME/.nvm"
+                    . "$NVM_DIR/nvm.sh"
+                    nvm use 20
+                    cd backend && npm install
+                '''
             }
         }
 
         // ── Frontend Install ──────────────────────────────────────────
         stage('Frontend Install') {
             steps {
-                dir('frontend') {
-                    sh 'npm install'
-                }
+                sh '''
+                    export NVM_DIR="$HOME/.nvm"
+                    . "$NVM_DIR/nvm.sh"
+                    nvm use 20
+                    cd frontend && npm install
+                '''
             }
         }
 
         // ── Tests unitaires Jest ──────────────────────────────────────
         stage('Unit Tests') {
             steps {
-                dir('backend') {
-                    sh 'npm test -- --passWithNoTests --coverage --coverageReporters=lcov || echo "⚠️  Tests: vérifier les résultats"'
-                }
+                sh '''
+                    export NVM_DIR="$HOME/.nvm"
+                    . "$NVM_DIR/nvm.sh"
+                    nvm use 20
+                    cd backend
+                    npm test -- --passWithNoTests --coverage --coverageReporters=lcov \
+                    || echo "⚠️  Tests: vérifier les résultats"
+                '''
             }
             post {
                 always {
@@ -135,9 +147,16 @@ pipeline {
         // ── Tests BDD Cucumber ────────────────────────────────────────
         stage('BDD Tests - Cucumber') {
             steps {
-                dir('backend') {
-                    sh 'npx --yes cucumber-js --format json:cucumber-report.json --format progress || echo "⚠️  Cucumber: pas de scénarios"'
-                }
+                sh '''
+                    export NVM_DIR="$HOME/.nvm"
+                    . "$NVM_DIR/nvm.sh"
+                    nvm use 20
+                    cd backend
+                    npx --yes cucumber-js \
+                      --format json:cucumber-report.json \
+                      --format progress \
+                    || echo "⚠️  Cucumber: pas de scénarios"
+                '''
             }
             post {
                 always {
@@ -177,12 +196,22 @@ pipeline {
         // ── OWASP Dependency Check ────────────────────────────────────
         stage('OWASP Dependency Check') {
             steps {
-                dir('backend') {
-                    sh 'npm audit --audit-level=high --json > npm-audit-backend.json || echo "⚠️  Vulnérabilités backend"'
-                }
-                dir('frontend') {
-                    sh 'npm audit --audit-level=high --json > npm-audit-frontend.json || echo "⚠️  Vulnérabilités frontend"'
-                }
+                sh '''
+                    export NVM_DIR="$HOME/.nvm"
+                    . "$NVM_DIR/nvm.sh"
+                    nvm use 20
+                    cd backend
+                    npm audit --audit-level=high --json > npm-audit-backend.json \
+                    || echo "⚠️  Vulnérabilités backend"
+                '''
+                sh '''
+                    export NVM_DIR="$HOME/.nvm"
+                    . "$NVM_DIR/nvm.sh"
+                    nvm use 20
+                    cd frontend
+                    npm audit --audit-level=high --json > npm-audit-frontend.json \
+                    || echo "⚠️  Vulnérabilités frontend"
+                '''
             }
             post {
                 always {
