@@ -3,8 +3,8 @@ pipeline {
     
     environment {
         DOCKER_REGISTRY = 'docker.io'
-        DOCKER_IMAGE_BACKEND = 'nasrhouda/taskmanager-backend'
-        DOCKER_IMAGE_FRONTEND = 'nasrhouda/taskmanager-frontend'
+        DOCKER_IMAGE_BACKEND = 'houdanasr/taskmanager-backend'
+        DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
         SONAR_HOST_URL = 'http://host.docker.internal:9000'
         DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
         SONAR_TOKEN = credentials('sonarqube-token')
@@ -16,7 +16,6 @@ pipeline {
                 sh 'chmod 666 /var/run/docker.sock || true'
             }
         }
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -99,12 +98,12 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
                     sh "docker push ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}"
                     sh "docker push ${DOCKER_IMAGE_BACKEND}:latest"
                     sh "docker push ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER}"
                     sh "docker push ${DOCKER_IMAGE_FRONTEND}:latest"
-                    sh "docker logout"
+                    sh 'docker logout'
                 }
             }
         }
