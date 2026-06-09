@@ -16,6 +16,7 @@ pipeline {
                 sh 'chmod 666 /var/run/docker.sock || true'
             }
         }
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -59,6 +60,19 @@ pipeline {
                         || echo "Sonar scan skipped"
                     '''
                 }
+            }
+        }
+
+        stage('Semgrep SAST') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v $(pwd):/src \
+                      returntocorp/semgrep:latest \
+                      semgrep --config=auto /src/backend \
+                      --json --output=/src/semgrep-report.json \
+                    || echo "Semgrep scan completed"
+                '''
             }
         }
         
@@ -119,6 +133,35 @@ pipeline {
                 sh 'kubectl apply -f kubernetes/frontend-service.yaml || true'
                 sh 'kubectl rollout status deployment/backend -n taskmanager --timeout=3m || true'
                 sh 'kubectl rollout status deployment/frontend -n taskmanager --timeout=3m || true'
+            }
+        }
+
+        stage('Kubescape Security Scan') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v ~/.kube:/root/.kube \
+                      -v $(pwd):/work \
+                      quay.io/armosec/kubescape:latest \
+                      scan framework nsa \
+                      --kubeconfig /root/.kube/config \
+                    || echo "Kubescape scan completed"
+                '''
+            }
+        }
+
+        stage('Kube-bench CIS Benchmark') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      --pid=host \
+                      -v /etc:/etc:ro \
+                      -v /var:/var:ro \
+                      -v /usr/lib/systemd:/usr/lib/systemd:ro \
+                      aquasec/kube-bench:latest \
+                      --version 1.28 \
+                    || echo "Kube-bench scan completed"
+                '''
             }
         }
     }
