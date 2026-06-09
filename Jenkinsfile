@@ -17,6 +17,12 @@ pipeline {
             }
         }
 
+        stage('Setup Kubectl') {
+            steps {
+                sh 'mkdir -p /root/.kube && cp /var/jenkins_home/.kube/config /root/.kube/config'
+            }
+        }
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -140,11 +146,12 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm \
-                      -v ~/.kube:/root/.kube \
-                      -v $(pwd):/work \
-                      quay.io/armosec/kubescape:latest \
+                      -v /var/jenkins_home/.kube:/root/.kube \
+                      -v $(pwd)/kubernetes:/work \
+                      quay.io/armosec/kubescape:v3.0.3 \
                       scan framework nsa \
-                      --kubeconfig /root/.kube/config \
+                      /work \
+                      --format pretty-printer \
                     || echo "Kubescape scan completed"
                 '''
             }
