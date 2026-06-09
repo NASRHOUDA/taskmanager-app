@@ -19,7 +19,8 @@ pipeline {
 
         stage('Setup Kubectl') {
             steps {
-                sh 'mkdir -p /root/.kube && cp /var/jenkins_home/.kube/config /root/.kube/config'
+                sh 'mkdir -p /var/jenkins_home/.kube && cp /var/jenkins_home/.kube/config /var/jenkins_home/.kube/config || true'
+                sh 'mkdir -p ~/.kube && cp /var/jenkins_home/.kube/config ~/.kube/config'
             }
         }
 
