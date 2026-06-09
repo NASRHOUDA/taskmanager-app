@@ -8,6 +8,7 @@ pipeline {
         SONAR_HOST_URL = 'http://host.docker.internal:9000'
         DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
         SONAR_TOKEN = credentials('sonarqube-token')
+        KUBECONFIG = '/var/jenkins_home/.kube/config'
     }
     
     stages {
@@ -19,8 +20,8 @@ pipeline {
 
         stage('Setup Kubectl') {
             steps {
-                sh 'mkdir -p /var/jenkins_home/.kube && cp /var/jenkins_home/.kube/config /var/jenkins_home/.kube/config || true'
-                sh 'mkdir -p ~/.kube && cp /var/jenkins_home/.kube/config ~/.kube/config'
+                sh 'mkdir -p /var/jenkins_home/.kube'
+                sh 'kubectl get nodes'
             }
         }
 
