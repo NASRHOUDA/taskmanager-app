@@ -157,17 +157,18 @@ pipeline {
         }
 
         stage('Kubescape Security Scan') {
-            steps {
-                sh '''
-                    docker run --rm \
-                      -v /var/jenkins_home/.kube:/root/.kube \
-                      -v $(pwd)/kubernetes:/work \
-                      quay.io/armosec/kubescape:latest \
-                      scan framework nsa /work --format pretty-printer \
-                    || echo "Kubescape scan completed"
-                '''
-            }
-        }
+    steps {
+        sh '''
+            docker run --rm \
+              -v $(pwd)/kubernetes:/work \
+              quay.io/armosec/kubescape:v2.0.174 \
+              scan framework nsa /work \
+              --format pretty-printer \
+              --enable-host-scan=false \
+            || echo "Kubescape scan completed"
+        '''
+    }
+}
 
         stage('Kube-bench CIS Benchmark') {
             steps {
