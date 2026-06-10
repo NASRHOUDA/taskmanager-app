@@ -87,9 +87,11 @@ pipeline {
         stage('OWASP Dependency Check') {
             steps {
                 dir('backend') {
+                    sh 'npm install || true'
                     sh 'npm audit --audit-level=high || echo "No critical vulnerabilities"'
                 }
                 dir('frontend') {
+                    sh 'npm install || true'
                     sh 'npm audit --audit-level=high || echo "No critical vulnerabilities"'
                 }
             }
@@ -150,7 +152,7 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm \
-                      -v ~/.kube:/root/.kube \
+                      -v /var/jenkins_home/.kube:/root/.kube \
                       -v $(pwd)/kubernetes:/work \
                       quay.io/armosec/kubescape:latest \
                       scan framework nsa /work --format pretty-printer \
@@ -162,14 +164,14 @@ pipeline {
         stage('Kube-bench CIS Benchmark') {
             steps {
                 sh '''
-                    docker run --rm \
-                      --pid=host \
-                      -v /etc:/etc:ro \
-                      -v /var:/var:ro \
-                      -v /usr/lib/systemd:/usr/lib/systemd:ro \
-                      aquasec/kube-bench:latest \
-                      --version 1.28 \
-                    || echo "Kube-bench scan completed"
+                    kubectl run kube-bench --image=aquasec/kube-bench:latest \
+                      --restart=Never \
+                      --overrides='{"spec":{"hostPID":true,"hostIPC":true,"hostNetwork":true}}' \
+                      -n default \
+                      -- --version 1.28 || echo "Kube-bench launched"
+                    sleep 30
+                    kubectl logs kube-bench -n default || echo "Kube-bench scan completed"
+                    kubectl delete pod kube-bench -n default || true
                 '''
             }
         }
@@ -185,17 +187,23 @@ pipeline {
     post {
         success {
             echo '✅ Pipeline réussi!'
-            slackSend(
-                color: 'good',
-                message: "✅ Pipeline réussi: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}"
-            )
+            script {
+                try {
+                    slackSend(color: 'good', message: "✅ Pipeline réussi: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}")
+                } catch (e) {
+                    echo "Slack not configured: ${e.message}"
+                }
+            }
         }
         failure {
             echo '❌ Pipeline échoué!'
-            slackSend(
-                color: 'danger',
-                message: "❌ Pipeline échoué: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}"
-            )
+            script {
+                try {
+                    slackSend(color: 'danger', message: "❌ Pipeline échoué: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}")
+                } catch (e) {
+                    echo "Slack not configured: ${e.message}"
+                }
+            }
         }
         always {
             cleanWs()
