@@ -161,11 +161,11 @@ pipeline {
         sh '''
             docker run --rm \
               -v $(pwd)/kubernetes:/work \
-              quay.io/armosec/kubescape:v2.0.174 \
-              scan framework nsa /work \
-              --format pretty-printer \
-              --enable-host-scan=false \
-            || echo "Kubescape scan completed"
+              bridgecrew/checkov:latest \
+              -d /work \
+              --framework kubernetes \
+              --soft-fail \
+            || echo "Checkov scan completed"
         '''
     }
 }
