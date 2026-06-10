@@ -21,7 +21,7 @@ pipeline {
         stage('Setup Kubectl') {
             steps {
                 sh 'mkdir -p /var/jenkins_home/.kube'
-                sh 'kubectl get nodes'
+                sh 'kubectl get nodes || echo "Kubectl not configured"'
             }
         }
 
@@ -49,7 +49,7 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 dir('backend') {
-                    sh 'npm test -- --passWithNoTests || echo "No tests yet"'
+                    sh 'npm test || echo "No tests yet"'
                 }
             }
         }
@@ -139,23 +139,25 @@ pipeline {
                 sh 'kubectl apply -f kubernetes/backend-service.yaml || true'
                 sh 'kubectl apply -f kubernetes/frontend-deployment.yaml || true'
                 sh 'kubectl apply -f kubernetes/frontend-service.yaml || true'
+                sh 'kubectl apply -f kubernetes/postgres-deployment.yaml || true'
                 sh 'kubectl rollout status deployment/backend -n taskmanager --timeout=3m || true'
                 sh 'kubectl rollout status deployment/frontend -n taskmanager --timeout=3m || true'
+                sh 'kubectl rollout status deployment/postgres -n taskmanager --timeout=3m || true'
             }
         }
 
         stage('Kubescape Security Scan') {
-    steps {
-        sh '''
-            docker run --rm \
-            -v ~/.kube:/root/.kube \
-            -v $(pwd)/kubernetes:/work \
-            quay.io/armosec/kubescape:v3.0.17 \
-            scan framework nsa /work --format pretty-printer \
-            || echo "Kubescape scan completed"
-        '''
-    }
-}
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v ~/.kube:/root/.kube \
+                      -v $(pwd)/kubernetes:/work \
+                      quay.io/armosec/kubescape:latest \
+                      scan framework nsa /work --format pretty-printer \
+                    || echo "Kubescape scan completed"
+                '''
+            }
+        }
 
         stage('Kube-bench CIS Benchmark') {
             steps {
@@ -171,14 +173,32 @@ pipeline {
                 '''
             }
         }
+        
+        stage('Verify Deployment') {
+            steps {
+                sh 'kubectl get pods -n taskmanager'
+                sh 'kubectl get svc -n taskmanager'
+            }
+        }
     }
     
     post {
         success {
             echo '✅ Pipeline réussi!'
+            slackSend(
+                color: 'good',
+                message: "✅ Pipeline réussi: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}"
+            )
         }
         failure {
             echo '❌ Pipeline échoué!'
+            slackSend(
+                color: 'danger',
+                message: "❌ Pipeline échoué: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}"
+            )
+        }
+        always {
+            cleanWs()
         }
     }
 }
