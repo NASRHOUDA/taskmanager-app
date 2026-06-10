@@ -9,6 +9,7 @@ pipeline {
         DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
         SONAR_TOKEN = credentials('sonarqube-token')
         KUBECONFIG = '/var/jenkins_home/.kube/config'
+        NODE_ENV = 'test'
     }
     
     stages {
@@ -34,7 +35,7 @@ pipeline {
         
         stage('Secret Scan - Gitleaks') {
             steps {
-                sh 'docker run --rm -v $(pwd):/path zricethezav/gitleaks:latest detect --source=/path --verbose || echo "No secrets found"'
+                sh 'docker run --rm -v $(pwd):/path zricethezav/gitleaks:latest detect --source=/path --verbose --no-git || echo "No secrets found"'
             }
         }
         
@@ -61,10 +62,12 @@ pipeline {
                         docker run --rm \
                           -e SONAR_HOST_URL=$SONAR_HOST_URL \
                           -e SONAR_TOKEN=$SONAR_TOKEN \
-                          -v $(pwd)/backend:/usr/src \
+                          -v $(pwd):/usr/src \
                           sonarsource/sonar-scanner-cli \
                           -Dsonar.projectKey=taskmanager-backend \
-                          -Dsonar.sources=. \
+                          -Dsonar.sources=backend \
+                          -Dsonar.exclusions=**/node_modules/** \
+                          -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info \
                         || echo "Sonar scan skipped"
                     '''
                 }
@@ -78,6 +81,7 @@ pipeline {
                       -v $(pwd):/src \
                       returntocorp/semgrep:latest \
                       semgrep --config=auto /src/backend \
+                      --no-git \
                       --json --output=/src/semgrep-report.json \
                     || echo "Semgrep scan completed"
                 '''
@@ -109,19 +113,19 @@ pipeline {
         }
         
         stage('Trivy Scan') {
-    steps {
-        sh "docker run --rm \
-          -v /var/run/docker.sock:/var/run/docker.sock \
-          -v trivy-cache:/root/.cache/trivy \
-          aquasec/trivy:latest image --severity HIGH,CRITICAL \
-          --exit-code 0 ${DOCKER_IMAGE_BACKEND}:latest"
-        sh "docker run --rm \
-          -v /var/run/docker.sock:/var/run/docker.sock \
-          -v trivy-cache:/root/.cache/trivy \
-          aquasec/trivy:latest image --severity HIGH,CRITICAL \
-          --exit-code 0 ${DOCKER_IMAGE_FRONTEND}:latest"
-    }
-}
+            steps {
+                sh "docker run --rm \
+                  -v /var/run/docker.sock:/var/run/docker.sock \
+                  -v trivy-cache:/root/.cache/trivy \
+                  aquasec/trivy:latest image --severity HIGH,CRITICAL \
+                  --exit-code 0 ${DOCKER_IMAGE_BACKEND}:latest"
+                sh "docker run --rm \
+                  -v /var/run/docker.sock:/var/run/docker.sock \
+                  -v trivy-cache:/root/.cache/trivy \
+                  aquasec/trivy:latest image --severity HIGH,CRITICAL \
+                  --exit-code 0 ${DOCKER_IMAGE_FRONTEND}:latest"
+            }
+        }
         
         stage('Push to Docker Hub') {
             steps {
@@ -157,18 +161,18 @@ pipeline {
         }
 
         stage('Kubescape Security Scan') {
-    steps {
-        sh '''
-            docker run --rm \
-              -v $(pwd)/kubernetes:/work \
-              bridgecrew/checkov:latest \
-              -d /work \
-              --framework kubernetes \
-              --soft-fail \
-            || echo "Checkov scan completed"
-        '''
-    }
-}
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v $(pwd)/kubernetes:/work \
+                      bridgecrew/checkov:latest \
+                      -d /work \
+                      --framework kubernetes \
+                      --soft-fail \
+                    || echo "Checkov scan completed"
+                '''
+            }
+        }
 
         stage('Kube-bench CIS Benchmark') {
             steps {
@@ -196,26 +200,9 @@ pipeline {
     post {
         success {
             echo '✅ Pipeline réussi!'
-            script {
-                try {
-                    slackSend(color: 'good', message: "✅ Pipeline réussi: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}")
-                } catch (e) {
-                    echo "Slack not configured: ${e.message}"
-                }
-            }
         }
         failure {
             echo '❌ Pipeline échoué!'
-            script {
-                try {
-                    slackSend(color: 'danger', message: "❌ Pipeline échoué: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}")
-                } catch (e) {
-                    echo "Slack not configured: ${e.message}"
-                }
-            }
-        }
-        always {
-            cleanWs()
         }
     }
 }
