@@ -109,11 +109,19 @@ pipeline {
         }
         
         stage('Trivy Scan') {
-            steps {
-                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_IMAGE_BACKEND}:latest || true"
-                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_IMAGE_FRONTEND}:latest || true"
-            }
-        }
+    steps {
+        sh "docker run --rm \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v trivy-cache:/root/.cache/trivy \
+          aquasec/trivy:latest image --severity HIGH,CRITICAL \
+          --exit-code 0 ${DOCKER_IMAGE_BACKEND}:latest"
+        sh "docker run --rm \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v trivy-cache:/root/.cache/trivy \
+          aquasec/trivy:latest image --severity HIGH,CRITICAL \
+          --exit-code 0 ${DOCKER_IMAGE_FRONTEND}:latest"
+    }
+}
         
         stage('Push to Docker Hub') {
             steps {
