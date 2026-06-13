@@ -75,7 +75,10 @@ pipeline {
                 docker run --rm \
                   -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork \
                   -v $(pwd):/output \
-                  alpine sh -c "cp /scannerwork/report-task.txt /output/ 2>/dev/null || echo 'report-task.txt not found'"
+                  alpine \
+                  cp /scannerwork/report-task.txt /output/report-task.txt
+
+                ls -la report-task.txt || echo "report-task.txt still not found"
 
                 docker volume rm sonar-scannerwork-$BUILD_NUMBER || true
 
