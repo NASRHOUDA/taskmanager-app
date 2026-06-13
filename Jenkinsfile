@@ -131,12 +131,13 @@ pipeline {
                     echo "✅ backend directory exists"
                 fi
                 
-                # Version simplifiée - SANS exclusions complexes
+                # Solution : --no-git-ignore pour ignorer .gitignore
                 docker run --rm \
                     -v ${WORKSPACE}:/workspace \
                     returntocorp/semgrep:latest \
                     semgrep scan \
                     --config=auto \
+                    --no-git-ignore \
                     --verbose \
                     /workspace/backend
                 
