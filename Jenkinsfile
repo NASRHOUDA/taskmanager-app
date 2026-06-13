@@ -121,18 +121,56 @@ pipeline {
         }
 
         stage('Semgrep SAST') {
-            steps {
-                // ✅ Fix: ajout de --no-git pour scanner tous les fichiers
-                sh '''
-                    docker run --rm \
-                      -v $(pwd):/src \
-                      returntocorp/semgrep:latest \
-                      semgrep --config=auto /src/backend \
-  --json --output=/src/semgrep-report.json \
-|| echo "✅ Semgrep scan completed"
-                '''
-            }
+    steps {
+        script {
+            // Créer un fichier .semgrepignore pour ignorer node_modules
+            sh '''
+                cat > .semgrepignore << EOF
+node_modules/
+coverage/
+dist/
+build/
+*.min.js
+EOF
+            '''
+            
+            // Scanner avec Semgrep (avec debug)
+            sh '''
+                echo "🔍 Scanning backend with Semgrep..."
+                
+                # Vérifier que le dossier backend existe
+                if [ ! -d "backend" ]; then
+                    echo "❌ ERROR: backend directory not found!"
+                    exit 1
+                fi
+                
+                echo "Files to scan:"
+                find backend -name "*.js" -type f | head -10
+                
+                # Lancer Semgrep
+                docker run --rm \
+                  -v "$(pwd)":/src \
+                  -w /src \
+                  returntocorp/semgrep:latest \
+                  semgrep scan \
+                    --config=auto \
+                    --include="backend/**/*.js" \
+                    --exclude="backend/node_modules/**" \
+                    --exclude="backend/coverage/**" \
+                    --json \
+                    --output=/src/semgrep-report.json
+                
+                echo "✅ Semgrep scan completed"
+                
+                # Afficher le résumé
+                if [ -f semgrep-report.json ]; then
+                    COUNT=$(grep -o '"results"' semgrep-report.json | wc -l || echo "0")
+                    echo "📊 Report saved with findings"
+                fi
+            '''
         }
+    }
+}
         
         stage('OWASP Dependency Check') {
             steps {
