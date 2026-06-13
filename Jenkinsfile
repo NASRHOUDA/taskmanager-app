@@ -9,6 +9,7 @@ pipeline {
         DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
         SONAR_TOKEN = credentials('sonarqube-token')
         KUBECONFIG = '/var/jenkins_home/.kube/config'
+        NODE_ENV = 'test'
     }
     
     stages {
@@ -34,7 +35,7 @@ pipeline {
         
         stage('Secret Scan - Gitleaks') {
             steps {
-                sh 'docker run --rm -v $(pwd):/path zricethezav/gitleaks:latest detect --source=/path --verbose || echo "No secrets found"'
+                sh 'docker run --rm -v $(pwd):/path zricethezav/gitleaks:latest detect --source=/path --verbose --no-git || echo "No secrets found"'
             }
         }
         
@@ -61,10 +62,12 @@ pipeline {
                         docker run --rm \
                           -e SONAR_HOST_URL=$SONAR_HOST_URL \
                           -e SONAR_TOKEN=$SONAR_TOKEN \
-                          -v $(pwd)/backend:/usr/src \
+                          -v $(pwd):/usr/src \
                           sonarsource/sonar-scanner-cli \
                           -Dsonar.projectKey=taskmanager-backend \
-                          -Dsonar.sources=. \
+                          -Dsonar.sources=backend \
+                          -Dsonar.exclusions=**/node_modules/** \
+                          -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info \
                         || echo "Sonar scan skipped"
                     '''
                 }
@@ -78,6 +81,7 @@ pipeline {
                       -v $(pwd):/src \
                       returntocorp/semgrep:latest \
                       semgrep --config=auto /src/backend \
+                      --no-git \
                       --json --output=/src/semgrep-report.json \
                     || echo "Semgrep scan completed"
                 '''
@@ -87,9 +91,11 @@ pipeline {
         stage('OWASP Dependency Check') {
             steps {
                 dir('backend') {
+                    sh 'npm install || true'
                     sh 'npm audit --audit-level=high || echo "No critical vulnerabilities"'
                 }
                 dir('frontend') {
+                    sh 'npm install || true'
                     sh 'npm audit --audit-level=high || echo "No critical vulnerabilities"'
                 }
             }
@@ -108,8 +114,16 @@ pipeline {
         
         stage('Trivy Scan') {
             steps {
-                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_IMAGE_BACKEND}:latest || true"
-                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_IMAGE_FRONTEND}:latest || true"
+                sh "docker run --rm \
+                  -v /var/run/docker.sock:/var/run/docker.sock \
+                  -v trivy-cache:/root/.cache/trivy \
+                  aquasec/trivy:latest image --severity HIGH,CRITICAL \
+                  --exit-code 0 ${DOCKER_IMAGE_BACKEND}:latest"
+                sh "docker run --rm \
+                  -v /var/run/docker.sock:/var/run/docker.sock \
+                  -v trivy-cache:/root/.cache/trivy \
+                  aquasec/trivy:latest image --severity HIGH,CRITICAL \
+                  --exit-code 0 ${DOCKER_IMAGE_FRONTEND}:latest"
             }
         }
         
@@ -150,11 +164,12 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm \
-                      -v ~/.kube:/root/.kube \
                       -v $(pwd)/kubernetes:/work \
-                      quay.io/armosec/kubescape:latest \
-                      scan framework nsa /work --format pretty-printer \
-                    || echo "Kubescape scan completed"
+                      bridgecrew/checkov:latest \
+                      -d /work \
+                      --framework kubernetes \
+                      --soft-fail \
+                    || echo "Checkov scan completed"
                 '''
             }
         }
@@ -162,14 +177,14 @@ pipeline {
         stage('Kube-bench CIS Benchmark') {
             steps {
                 sh '''
-                    docker run --rm \
-                      --pid=host \
-                      -v /etc:/etc:ro \
-                      -v /var:/var:ro \
-                      -v /usr/lib/systemd:/usr/lib/systemd:ro \
-                      aquasec/kube-bench:latest \
-                      --version 1.28 \
-                    || echo "Kube-bench scan completed"
+                    kubectl run kube-bench --image=aquasec/kube-bench:latest \
+                      --restart=Never \
+                      --overrides='{"spec":{"hostPID":true,"hostIPC":true,"hostNetwork":true}}' \
+                      -n default \
+                      -- --version 1.28 || echo "Kube-bench launched"
+                    sleep 30
+                    kubectl logs kube-bench -n default || echo "Kube-bench scan completed"
+                    kubectl delete pod kube-bench -n default || true
                 '''
             }
         }
@@ -185,20 +200,9 @@ pipeline {
     post {
         success {
             echo '✅ Pipeline réussi!'
-            slackSend(
-                color: 'good',
-                message: "✅ Pipeline réussi: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}"
-            )
         }
         failure {
             echo '❌ Pipeline échoué!'
-            slackSend(
-                color: 'danger',
-                message: "❌ Pipeline échoué: ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}"
-            )
-        }
-        always {
-            cleanWs()
         }
     }
 }
