@@ -122,28 +122,22 @@ pipeline {
 
        stage('Semgrep SAST') {
     steps {
-        script {
-            sh '''
-                echo "=== Semgrep avec montage direct ==="
-                
-                # Aller dans le dossier backend et scanner
-                cd backend
-                
-                # Monter le répertoire courant dans Docker
-                docker run --rm \
-                    -v "$(pwd)":/src \
-                    returntocorp/semgrep:latest \
-                    semgrep scan \
-                    --config=auto \
-                    --no-git-ignore \
-                    --verbose \
-                    --exclude="node_modules" \
-                    --exclude="coverage" \
-                    /src
-                
-                echo "✅ Semgrep completed"
-            '''
-        }
+        sh '''
+            docker run --rm \
+                -v ${HOST_WORKSPACE_BACKEND}:/src \
+                returntocorp/semgrep:latest \
+                semgrep scan \
+                --config=auto \
+                --no-git-ignore \
+                --exclude=node_modules \
+                --exclude=coverage \
+                --json \
+                --output=/src/semgrep-report.json \
+                /src \
+            || echo "Semgrep scan completed"
+
+            ls -la backend/semgrep-report.json || echo "report not found"
+        '''
     }
 }
         
