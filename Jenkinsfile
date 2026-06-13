@@ -59,17 +59,44 @@ pipeline {
     steps {
         withSonarQubeEnv('SonarQube') {
             sh '''
+                rm -rf .scannerwork
+                mkdir -p .scannerwork
+
                 docker run --rm \
                   -e SONAR_HOST_URL=$SONAR_HOST_URL \
                   -e SONAR_TOKEN=$SONAR_TOKEN \
                   -v $(pwd)/backend:/usr/src \
+                  -v $(pwd)/.scannerwork:/usr/src/.scannerwork \
                   sonarsource/sonar-scanner-cli \
                   -Dsonar.projectKey=taskmanager-backend \
                   -Dsonar.projectBaseDir=/usr/src \
                   -Dsonar.sources=. \
                   -Dsonar.exclusions=**/node_modules/**,**/*.test.js \
+                  -Dsonar.working.directory=/usr/src/.scannerwork \
                 || echo "Sonar scan skipped"
+
+                cp .scannerwork/report-task.txt . || echo "report-task.txt not found, Quality Gate will be skipped"
             '''
+        }
+    }
+}
+
+stage('SonarQube Quality Gate') {
+    steps {
+        script {
+            if (fileExists('report-task.txt')) {
+                timeout(time: 5, unit: 'MINUTES') {
+                    def qg = waitForQualityGate abortPipeline: false
+                    echo "Quality Gate status: ${qg.status}"
+                    if (qg.status != 'OK') {
+                        echo "⚠️ Quality Gate failed: ${qg.status}"
+                    } else {
+                        echo "✅ Quality Gate passed"
+                    }
+                }
+            } else {
+                echo "⚠️ report-task.txt absent — Quality Gate ignoré"
+            }
         }
     }
 }
