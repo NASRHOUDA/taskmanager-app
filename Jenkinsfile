@@ -59,6 +59,9 @@ pipeline {
     steps {
         withSonarQubeEnv('SonarQube') {
             sh '''
+                echo "=== Vérif accès fichiers depuis le contexte scanner ==="
+                docker run --rm -v $(pwd)/backend:/usr/src sonarsource/sonar-scanner-cli ls -la /usr/src
+
                 docker run --rm \
                   --name sonar-scan-$BUILD_NUMBER \
                   -e SONAR_HOST_URL=$SONAR_HOST_URL \
@@ -73,11 +76,19 @@ pipeline {
                   -Dsonar.exclusions=node_modules/**,**/*.test.js \
                   -Dsonar.sourceEncoding=UTF-8 \
                 || true
-                ...
+
+                CID=$(docker create -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork alpine true)
+                docker cp $CID:/scannerwork/report-task.txt ./report-task.txt || echo "copy failed"
+                docker rm $CID
+
+                ls -la report-task.txt || echo "report-task.txt still not found"
+
+                docker volume rm sonar-scannerwork-$BUILD_NUMBER || true
             '''
         }
     }
 }
+
 stage('SonarQube Quality Gate') {
     steps {
         script {
