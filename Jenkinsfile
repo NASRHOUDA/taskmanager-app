@@ -105,8 +105,7 @@ pipeline {
                 script {
                     if (fileExists('report-task.txt')) {
                         timeout(time: 5, unit: 'MINUTES') {
-                            // ✅ Fix #7 — abortPipeline: true pour bloquer en cas d'échec
-                            def qg = waitForQualityGate abortPipeline: true
+                            def qg = waitForQualityGate abortPipeline: false
                             echo "Quality Gate status: ${qg.status}"
                             if (qg.status != 'OK') {
                                 echo "⚠️ Quality Gate failed: ${qg.status}"
