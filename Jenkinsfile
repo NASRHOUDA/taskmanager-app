@@ -59,7 +59,6 @@ pipeline {
     steps {
         withSonarQubeEnv('SonarQube') {
             sh '''
-                # Copier le coverage du workspace actuel vers le chemin monté
                 WORKSPACE_BASE=/var/lib/docker/volumes/jenkins_home/_data/workspace
                 cp -rf ${WORKSPACE}/backend/coverage \
                     ${WORKSPACE_BASE}/taskmanager-pipeline/backend/ 2>/dev/null || true
@@ -75,7 +74,8 @@ pipeline {
                   -Dsonar.projectBaseDir=/usr/src \
                   -Dsonar.sources=. \
                   -Dsonar.inclusions=**/*.js \
-                  -Dsonar.exclusions=node_modules/**,**/*.test.js \
+                  -Dsonar.exclusions=node_modules/**,**/*.test.js,coverage/** \
+                  -Dsonar.coverage.exclusions=coverage/** \
                   -Dsonar.sourceEncoding=UTF-8 \
                   -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
                 || true
