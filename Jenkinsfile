@@ -124,27 +124,21 @@ pipeline {
     steps {
         script {
             sh '''
-                echo "=== DEBUG: Liste des fichiers JS dans backend ==="
+                echo "=== Diagnostic ==="
+                echo "Current directory: $(pwd)"
+                echo "Backend exists? $([ -d backend ] && echo YES || echo NO)"
+                echo "Backend files: $(ls backend/ | wc -l)"
+                
+                # Utiliser pwd au lieu de WORKSPACE
                 docker run --rm \
-                    -v ${WORKSPACE}:/workspace \
+                    -v "$(pwd)":/workspace \
                     returntocorp/semgrep:latest \
                     sh -c "
-                        echo 'Fichiers JS trouvés :'
-                        find /workspace/backend -name '*.js' -type f | head -20
+                        echo '=== Dans le conteneur ==='
+                        ls -la /workspace/
                         echo ''
-                        echo 'Total JS files :'
-                        find /workspace/backend -name '*.js' -type f | wc -l
+                        ls -la /workspace/backend/ | head -20
                     "
-                
-                echo "=== Lancement de Semgrep avec debug ==="
-                docker run --rm \
-                    -v ${WORKSPACE}:/workspace \
-                    returntocorp/semgrep:latest \
-                    semgrep scan \
-                    --config=auto \
-                    --no-git-ignore \
-                    --debug \
-                    /workspace/backend 2>&1 | head -100
             '''
         }
     }
