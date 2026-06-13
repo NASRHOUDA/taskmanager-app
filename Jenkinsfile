@@ -122,32 +122,47 @@ pipeline {
 
        stage('Semgrep SAST') {
     steps {
-        sh '''
-            echo "🔍 Scanning with Semgrep..."
-            
-            # Version simple qui fonctionne à coup sûr
-            docker run --rm \
-              -v $(pwd):/src \
-              -w /src \
-              returntocorp/semgrep:latest \
-              semgrep scan \
-                --config=auto \
-                --exclude="*/node_modules/*" \
-                --exclude="*/coverage/*" \
-                --exclude="*/dist/*" \
-                --exclude="*/build/*" \
-                --json \
-                --output=semgrep-report.json \
-                /src/backend
-            
-            echo "✅ Semgrep completed"
-            
-            # Afficher le nombre de findings
-            if [ -f semgrep-report.json ]; then
-                echo "📊 Report saved to semgrep-report.json"
-                ls -lh semgrep-report.json
-            fi
-        '''
+        script {
+            sh '''
+                echo "=== Diagnostic Semgrep ==="
+                echo "Workspace: ${WORKSPACE}"
+                
+                # Vérifier que les fichiers existent
+                if [ -d "backend" ]; then
+                    echo "✅ backend directory exists"
+                    echo "Number of JS files: $(find backend -name "*.js" | wc -l)"
+                else
+                    echo "❌ backend directory NOT found!"
+                    exit 1
+                fi
+                
+                echo "=========================="
+                
+                # Scanner avec Semgrep en utilisant le chemin absolu
+                docker run --rm \
+                    -v ${WORKSPACE}:/workspace \
+                    returntocorp/semgrep:latest \
+                    semgrep scan \
+                    --config=auto \
+                    --metrics=off \
+                    --no-git-ignore \
+                    --exclude="*/node_modules/*" \
+                    --exclude="*/coverage/*" \
+                    --exclude="*/tests/*" \
+                    --exclude="*.test.js" \
+                    --json \
+                    --output=/workspace/semgrep-report.json \
+                    /workspace/backend
+                
+                echo "✅ Scan completed"
+                
+                # Afficher le rapport si présent
+                if [ -f semgrep-report.json ]; then
+                    echo "📊 Report generated"
+                    ls -lh semgrep-report.json
+                fi
+            '''
+        }
     }
 }
         
