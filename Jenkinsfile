@@ -124,27 +124,24 @@ pipeline {
     steps {
         script {
             sh '''
-                echo "=== Copie des fichiers dans un conteneur temporaire ==="
+                echo "=== Semgrep avec montage direct ==="
                 
-                # Créer un conteneur temporaire avec les fichiers
-                docker run --name semgrep-temp -d alpine tail -f /dev/null
+                # Aller dans le dossier backend et scanner
+                cd backend
                 
-                # Copier les fichiers backend dans le conteneur
-                docker cp backend/. semgrep-temp:/src/backend/
-                
-                # Exécuter Semgrep
-                docker exec semgrep-temp sh -c "
-                    apk add --no-cache nodejs npm 2>/dev/null || true
+                # Monter le répertoire courant dans Docker
+                docker run --rm \
+                    -v "$(pwd)":/src \
+                    returntocorp/semgrep:latest \
                     semgrep scan \
-                        --config=auto \
-                        --no-git-ignore \
-                        --verbose \
-                        /src/backend
-                " || echo "Semgrep execution"
+                    --config=auto \
+                    --no-git-ignore \
+                    --verbose \
+                    --exclude="node_modules" \
+                    --exclude="coverage" \
+                    /src
                 
-                # Nettoyer
-                docker stop semgrep-temp
-                docker rm semgrep-temp
+                echo "✅ Semgrep completed"
             '''
         }
     }
