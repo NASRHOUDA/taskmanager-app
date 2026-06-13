@@ -10,6 +10,8 @@ pipeline {
     SONAR_TOKEN = credentials('sonarqube-token')
     KUBECONFIG = '/var/jenkins_home/.kube/config'
     HOST_WORKSPACE_BACKEND = '/var/lib/docker/volumes/jenkins_home/_data/workspace/taskmanager-pipeline/backend'
+    GOOGLE_CLIENT_ID = credentials('google-client-id')
+    GOOGLE_CLIENT_SECRET = credentials('google-client-secret')
 }
     
     stages {
