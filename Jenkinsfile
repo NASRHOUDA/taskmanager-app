@@ -64,12 +64,20 @@ pipeline {
                   -e SONAR_HOST_URL=$SONAR_HOST_URL \
                   -e SONAR_TOKEN=$SONAR_TOKEN \
                   -v $(pwd)/backend:/usr/src \
+                  -v sonar-scannerwork-$BUILD_NUMBER:/tmp/.scannerwork \
                   sonarsource/sonar-scanner-cli \
                   -Dsonar.projectKey=taskmanager-backend \
                   -Dsonar.projectBaseDir=/usr/src \
                   -Dsonar.sources=. \
                   -Dsonar.exclusions=**/node_modules/**,**/*.test.js \
                 || true
+
+                docker run --rm \
+                  -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork \
+                  -v $(pwd):/output \
+                  alpine sh -c "cp /scannerwork/report-task.txt /output/ 2>/dev/null || echo 'report-task.txt not found'"
+
+                docker volume rm sonar-scannerwork-$BUILD_NUMBER || true
 
                 echo "Analyse terminée — vérifier le dashboard SonarQube directement"
             '''
