@@ -72,17 +72,18 @@ pipeline {
                   -Dsonar.exclusions=**/node_modules/**,**/*.test.js \
                 || true
 
+                echo "=== Contenu du volume .scannerwork ==="
+                docker run --rm -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork alpine find /scannerwork -type f
+
                 docker run --rm \
                   -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork \
                   -v $(pwd):/output \
                   alpine \
-                  cp /scannerwork/report-task.txt /output/report-task.txt
+                  cp /scannerwork/report-task.txt /output/report-task.txt || echo "copy failed"
 
                 ls -la report-task.txt || echo "report-task.txt still not found"
 
                 docker volume rm sonar-scannerwork-$BUILD_NUMBER || true
-
-                echo "Analyse terminée — vérifier le dashboard SonarQube directement"
             '''
         }
     }
