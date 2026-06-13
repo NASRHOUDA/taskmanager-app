@@ -129,29 +129,18 @@ pipeline {
                 
                 if [ -d "backend" ]; then
                     echo "✅ backend directory exists"
-                    echo "Number of JS files: $(find backend -name "*.js" | wc -l)"
                 fi
                 
+                # Version simplifiée - SANS exclusions complexes
                 docker run --rm \
                     -v ${WORKSPACE}:/workspace \
                     returntocorp/semgrep:latest \
                     semgrep scan \
                     --config=auto \
-                    --no-git-ignore \
-                    --exclude="*/node_modules/*" \
-                    --exclude="*/coverage/*" \
-                    --exclude="*/tests/*" \
-                    --exclude="*.test.js" \
-                    --json \
-                    --output=/workspace/semgrep-report.json \
+                    --verbose \
                     /workspace/backend
                 
                 echo "✅ Scan completed"
-                
-                if [ -f semgrep-report.json ]; then
-                    echo "📊 Report generated"
-                    ls -lh semgrep-report.json
-                fi
             '''
         }
     }
