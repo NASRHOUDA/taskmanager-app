@@ -2,17 +2,17 @@ pipeline {
     agent any
     
     environment {
-    DOCKER_REGISTRY = 'docker.io'
-    DOCKER_IMAGE_BACKEND = 'houdanasr/taskmanager-backend'
-    DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
-    SONAR_HOST_URL = 'http://host.docker.internal:9000'
-    DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
-    SONAR_TOKEN = credentials('sonarqube-token')
-    KUBECONFIG = '/var/jenkins_home/.kube/config'
-    HOST_WORKSPACE_BACKEND = '/var/lib/docker/volumes/jenkins_home/_data/workspace/taskmanager-pipeline/backend'
-    GOOGLE_CLIENT_ID = credentials('google-client-id')
-    GOOGLE_CLIENT_SECRET = credentials('google-client-secret')
-}
+        DOCKER_REGISTRY = 'docker.io'
+        DOCKER_IMAGE_BACKEND = 'houdanasr/taskmanager-backend'
+        DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
+        SONAR_HOST_URL = 'http://host.docker.internal:9000'
+        DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
+        SONAR_TOKEN = credentials('sonarqube-token')
+        KUBECONFIG = '/var/jenkins_home/.kube/config'
+        HOST_WORKSPACE_BACKEND = '/var/lib/docker/volumes/jenkins_home/_data/workspace/taskmanager-pipeline/backend'
+        GOOGLE_CLIENT_ID = credentials('google-client-id')
+        GOOGLE_CLIENT_SECRET = credentials('google-client-secret')
+    }
     
     stages {
         stage('Fix Docker Socket') {
@@ -57,71 +57,72 @@ pipeline {
             }
         }
         
-      stage('SonarQube Analysis') {
-    steps {
-        withSonarQubeEnv('SonarQube') {
-            sh '''
-                WORKSPACE_BASE=/var/lib/docker/volumes/jenkins_home/_data/workspace
-                cp -rf ${WORKSPACE}/backend/coverage \
-                    ${WORKSPACE_BASE}/taskmanager-pipeline/backend/ 2>/dev/null || true
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                        WORKSPACE_BASE=/var/lib/docker/volumes/jenkins_home/_data/workspace
+                        cp -rf ${WORKSPACE}/backend/coverage \
+                            ${WORKSPACE_BASE}/taskmanager-pipeline/backend/ 2>/dev/null || true
 
-                docker run --rm \
-                  --name sonar-scan-$BUILD_NUMBER \
-                  -e SONAR_HOST_URL=$SONAR_HOST_URL \
-                  -e SONAR_TOKEN=$SONAR_TOKEN \
-                  -v ${WORKSPACE_BASE}/taskmanager-pipeline/backend:/usr/src \
-                  -v sonar-scannerwork-$BUILD_NUMBER:/tmp/.scannerwork \
-                  sonarsource/sonar-scanner-cli \
-                  -Dsonar.projectKey=taskmanager-backend \
-                  -Dsonar.projectBaseDir=/usr/src \
-                  -Dsonar.sources=. \
-                  -Dsonar.inclusions=**/*.js \
-                  -Dsonar.exclusions=node_modules/**,**/*.test.js,coverage/** \
-                  -Dsonar.coverage.exclusions=coverage/** \
-                  -Dsonar.sourceEncoding=UTF-8 \
-                  -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                || true
+                        docker run --rm \
+                          --name sonar-scan-$BUILD_NUMBER \
+                          -e SONAR_HOST_URL=$SONAR_HOST_URL \
+                          -e SONAR_TOKEN=$SONAR_TOKEN \
+                          -v ${WORKSPACE_BASE}/taskmanager-pipeline/backend:/usr/src \
+                          -v sonar-scannerwork-$BUILD_NUMBER:/tmp/.scannerwork \
+                          sonarsource/sonar-scanner-cli \
+                          -Dsonar.projectKey=taskmanager-backend \
+                          -Dsonar.projectBaseDir=/usr/src \
+                          -Dsonar.sources=. \
+                          -Dsonar.inclusions=**/*.js \
+                          -Dsonar.exclusions=node_modules/**,**/*.test.js,coverage/** \
+                          -Dsonar.coverage.exclusions=coverage/** \
+                          -Dsonar.sourceEncoding=UTF-8 \
+                          -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                        || true
 
-                CID=$(docker create -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork alpine true)
-                docker cp $CID:/scannerwork/report-task.txt ./report-task.txt || echo "copy failed"
-                docker rm $CID
-                docker volume rm sonar-scannerwork-$BUILD_NUMBER || true
-            '''
-        }
-    }
-}
-stage('SonarQube Quality Gate') {
-    steps {
-        script {
-            if (fileExists('report-task.txt')) {
-                timeout(time: 5, unit: 'MINUTES') {
-                    def qg = waitForQualityGate abortPipeline: false
-                    echo "Quality Gate status: ${qg.status}"
-                    if (qg.status != 'OK') {
-                        echo "⚠️ Quality Gate failed: ${qg.status}"
-                    } else {
-                        echo "✅ Quality Gate passed"
-                    }
+                        CID=$(docker create -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork alpine true)
+                        docker cp $CID:/scannerwork/report-task.txt ./report-task.txt || echo "copy failed"
+                        docker rm $CID
+                        docker volume rm sonar-scannerwork-$BUILD_NUMBER || true
+                    '''
                 }
-            } else {
-                echo "⚠️ report-task.txt absent — Quality Gate ignoré"
             }
         }
-    }
-}
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    if (fileExists('report-task.txt')) {
+                        timeout(time: 5, unit: 'MINUTES') {
+                            def qg = waitForQualityGate abortPipeline: false
+                            echo "Quality Gate status: ${qg.status}"
+                            if (qg.status != 'OK') {
+                                echo "⚠️ Quality Gate failed: ${qg.status}"
+                            } else {
+                                echo "✅ Quality Gate passed"
+                            }
+                        }
+                    } else {
+                        echo "⚠️ report-task.txt absent — Quality Gate ignoré"
+                    }
+                }
+            }
+        }
 
         stage('Semgrep SAST') {
-    steps {
-        sh '''
-            docker run --rm \
-              -v $(pwd):/src \
-              returntocorp/semgrep:latest \
-              semgrep --config=auto /src/backend \
-              --json --output=/src/semgrep-report.json \
-            || echo "Semgrep scan completed"
-        '''
-    }
-}
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v $(pwd):/src \
+                      returntocorp/semgrep:latest \
+                      semgrep --config=auto /src/backend \
+                      --json --output=/src/semgrep-report.json \
+                    || echo "Semgrep scan completed"
+                '''
+            }
+        }
         
         stage('OWASP Dependency Check') {
             steps {
@@ -189,6 +190,11 @@ stage('SonarQube Quality Gate') {
                 sh 'kubectl apply -f kubernetes/frontend-deployment.yaml || true'
                 sh 'kubectl apply -f kubernetes/frontend-service.yaml || true'
                 sh 'kubectl apply -f kubernetes/postgres-deployment.yaml || true'
+                
+                // ✅ Force le redéploiement avec la nouvelle image à chaque build
+                sh "kubectl set image deployment/backend backend=${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER} -n taskmanager || true"
+                sh "kubectl set image deployment/frontend frontend=${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} -n taskmanager || true"
+                
                 sh 'kubectl rollout status deployment/backend -n taskmanager --timeout=3m || true'
                 sh 'kubectl rollout status deployment/frontend -n taskmanager --timeout=3m || true'
                 sh 'kubectl rollout status deployment/postgres -n taskmanager --timeout=3m || true'
