@@ -80,9 +80,8 @@ pipeline {
                     docker run --rm \
                       -v $(pwd):/src \
                       returntocorp/semgrep:latest \
-                      semgrep --config=auto /src/backend \
-                      --no-git \
-                      --json --output=/src/semgrep-report.json \
+                     semgrep --config=auto /src/backend \
+                     --json --output=/src/semgrep-report.json 
                     || echo "Semgrep scan completed"
                 '''
             }
