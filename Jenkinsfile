@@ -72,14 +72,13 @@ pipeline {
                   -Dsonar.exclusions=**/node_modules/**,**/*.test.js \
                 || true
 
-                echo "=== Contenu du volume .scannerwork ==="
-                docker run --rm -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork alpine find /scannerwork -type f
+                # Créer un conteneur (sans le démarrer) avec le volume attaché
+                CID=$(docker create -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork alpine true)
 
-                docker run --rm \
-                  -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork \
-                  -v $(pwd):/output \
-                  alpine \
-                  cp /scannerwork/report-task.txt /output/report-task.txt || echo "copy failed"
+                # docker cp ne fait pas de bind mount, copie directement
+                docker cp $CID:/scannerwork/report-task.txt ./report-task.txt || echo "copy failed"
+
+                docker rm $CID
 
                 ls -la report-task.txt || echo "report-task.txt still not found"
 
@@ -88,7 +87,6 @@ pipeline {
         }
     }
 }
-
 stage('SonarQube Quality Gate') {
     steps {
         script {
