@@ -62,13 +62,12 @@ pipeline {
                 docker run --rm \
                   -e SONAR_HOST_URL=$SONAR_HOST_URL \
                   -e SONAR_TOKEN=$SONAR_TOKEN \
-                  -v $(pwd):/usr/src \
+                  -v $(pwd)/backend:/usr/src \
                   sonarsource/sonar-scanner-cli \
                   -Dsonar.projectKey=taskmanager-backend \
                   -Dsonar.projectBaseDir=/usr/src \
                   -Dsonar.sources=. \
-                  -Dsonar.inclusions=backend/**/*.js \
-                  -Dsonar.exclusions=**/node_modules/** \
+                  -Dsonar.exclusions=**/node_modules/**,**/*.test.js \
                 || echo "Sonar scan skipped"
             '''
         }
