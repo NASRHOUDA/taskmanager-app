@@ -66,9 +66,9 @@ pipeline {
                   sonarsource/sonar-scanner-cli \
                   -Dsonar.projectKey=taskmanager-backend \
                   -Dsonar.projectBaseDir=/usr/src \
-                  -Dsonar.sources=/usr/src/backend \
+                  -Dsonar.sources=. \
+                  -Dsonar.inclusions=backend/**/*.js \
                   -Dsonar.exclusions=**/node_modules/** \
-                  -Dsonar.javascript.lcov.reportPaths=/usr/src/backend/coverage/lcov.info \
                 || echo "Sonar scan skipped"
             '''
         }
