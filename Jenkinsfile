@@ -55,37 +55,38 @@ pipeline {
             }
         }
         
-        stage('SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('SonarQube') {
-                    sh '''
-                        docker run --rm \
-                          -e SONAR_HOST_URL=$SONAR_HOST_URL \
-                          -e SONAR_TOKEN=$SONAR_TOKEN \
-                          -v $(pwd):/usr/src \
-                          sonarsource/sonar-scanner-cli \
-                          -Dsonar.projectKey=taskmanager-backend \
-                          -Dsonar.sources=backend \
-                          -Dsonar.exclusions=**/node_modules/** \
-                          -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info \
-                        || echo "Sonar scan skipped"
-                    '''
-                }
-            }
+       stage('SonarQube Analysis') {
+    steps {
+        withSonarQubeEnv('SonarQube') {
+            sh '''
+                docker run --rm \
+                  -e SONAR_HOST_URL=$SONAR_HOST_URL \
+                  -e SONAR_TOKEN=$SONAR_TOKEN \
+                  -v $(pwd):/usr/src \
+                  sonarsource/sonar-scanner-cli \
+                  -Dsonar.projectKey=taskmanager-backend \
+                  -Dsonar.projectBaseDir=/usr/src \
+                  -Dsonar.sources=/usr/src/backend \
+                  -Dsonar.exclusions=**/node_modules/** \
+                  -Dsonar.javascript.lcov.reportPaths=/usr/src/backend/coverage/lcov.info \
+                || echo "Sonar scan skipped"
+            '''
         }
+    }
+}
 
         stage('Semgrep SAST') {
-            steps {
-                sh '''
-                    docker run --rm \
-                      -v $(pwd):/src \
-                      returntocorp/semgrep:latest \
-                     semgrep --config=auto /src/backend \
-                     --json --output=/src/semgrep-report.json 
-                    || echo "Semgrep scan completed"
-                '''
-            }
-        }
+    steps {
+        sh '''
+            docker run --rm \
+              -v $(pwd):/src \
+              returntocorp/semgrep:latest \
+              semgrep --config=auto /src/backend \
+              --json --output=/src/semgrep-report.json \
+            || echo "Semgrep scan completed"
+        '''
+    }
+}
         
         stage('OWASP Dependency Check') {
             steps {
