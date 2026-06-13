@@ -69,20 +69,11 @@ pipeline {
                   -Dsonar.projectKey=taskmanager-backend \
                   -Dsonar.projectBaseDir=/usr/src \
                   -Dsonar.sources=. \
-                  -Dsonar.exclusions=**/node_modules/**,**/*.test.js \
+                  -Dsonar.inclusions=**/*.js \
+                  -Dsonar.exclusions=node_modules/**,**/*.test.js \
+                  -Dsonar.sourceEncoding=UTF-8 \
                 || true
-
-                # Créer un conteneur (sans le démarrer) avec le volume attaché
-                CID=$(docker create -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork alpine true)
-
-                # docker cp ne fait pas de bind mount, copie directement
-                docker cp $CID:/scannerwork/report-task.txt ./report-task.txt || echo "copy failed"
-
-                docker rm $CID
-
-                ls -la report-task.txt || echo "report-task.txt still not found"
-
-                docker volume rm sonar-scannerwork-$BUILD_NUMBER || true
+                ...
             '''
         }
     }
