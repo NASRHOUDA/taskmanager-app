@@ -128,9 +128,8 @@ pipeline {
                       -v $(pwd):/src \
                       returntocorp/semgrep:latest \
                       semgrep --config=auto /src/backend \
-                      --no-git \
-                      --json --output=/src/semgrep-report.json \
-                    || echo "✅ Semgrep scan completed"
+  --json --output=/src/semgrep-report.json \
+|| echo "✅ Semgrep scan completed"
                 '''
             }
         }
