@@ -59,11 +59,16 @@ pipeline {
     steps {
         withSonarQubeEnv('SonarQube') {
             sh '''
+                # Copier le coverage du workspace actuel vers le chemin monté
+                WORKSPACE_BASE=/var/lib/docker/volumes/jenkins_home/_data/workspace
+                cp -rf ${WORKSPACE}/backend/coverage \
+                    ${WORKSPACE_BASE}/taskmanager-pipeline/backend/ 2>/dev/null || true
+
                 docker run --rm \
                   --name sonar-scan-$BUILD_NUMBER \
                   -e SONAR_HOST_URL=$SONAR_HOST_URL \
                   -e SONAR_TOKEN=$SONAR_TOKEN \
-                  -v ${HOST_WORKSPACE_BACKEND}:/usr/src \
+                  -v ${WORKSPACE_BASE}/taskmanager-pipeline/backend:/usr/src \
                   -v sonar-scannerwork-$BUILD_NUMBER:/tmp/.scannerwork \
                   sonarsource/sonar-scanner-cli \
                   -Dsonar.projectKey=taskmanager-backend \
