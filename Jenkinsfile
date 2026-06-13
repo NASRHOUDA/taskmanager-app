@@ -55,7 +55,7 @@ pipeline {
             }
         }
         
-       stage('SonarQube Analysis') {
+      stage('SonarQube Analysis') {
     steps {
         withSonarQubeEnv('SonarQube') {
             sh '''
@@ -72,6 +72,7 @@ pipeline {
                   -Dsonar.inclusions=**/*.js \
                   -Dsonar.exclusions=node_modules/**,**/*.test.js \
                   -Dsonar.sourceEncoding=UTF-8 \
+                  -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
                 || true
 
                 CID=$(docker create -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork alpine true)
