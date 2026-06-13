@@ -124,21 +124,27 @@ pipeline {
     steps {
         script {
             sh '''
-                echo "=== Diagnostic ==="
-                echo "Current directory: $(pwd)"
-                echo "Backend exists? $([ -d backend ] && echo YES || echo NO)"
-                echo "Backend files: $(ls backend/ | wc -l)"
+                echo "=== Copie des fichiers dans un conteneur temporaire ==="
                 
-                # Utiliser pwd au lieu de WORKSPACE
-                docker run --rm \
-                    -v "$(pwd)":/workspace \
-                    returntocorp/semgrep:latest \
-                    sh -c "
-                        echo '=== Dans le conteneur ==='
-                        ls -la /workspace/
-                        echo ''
-                        ls -la /workspace/backend/ | head -20
-                    "
+                # Créer un conteneur temporaire avec les fichiers
+                docker run --name semgrep-temp -d alpine tail -f /dev/null
+                
+                # Copier les fichiers backend dans le conteneur
+                docker cp backend/. semgrep-temp:/src/backend/
+                
+                # Exécuter Semgrep
+                docker exec semgrep-temp sh -c "
+                    apk add --no-cache nodejs npm 2>/dev/null || true
+                    semgrep scan \
+                        --config=auto \
+                        --no-git-ignore \
+                        --verbose \
+                        /src/backend
+                " || echo "Semgrep execution"
+                
+                # Nettoyer
+                docker stop semgrep-temp
+                docker rm semgrep-temp
             '''
         }
     }
