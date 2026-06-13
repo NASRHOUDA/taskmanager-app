@@ -124,24 +124,27 @@ pipeline {
     steps {
         script {
             sh '''
-                echo "=== Diagnostic Semgrep ==="
-                echo "Workspace: ${WORKSPACE}"
+                echo "=== DEBUG: Liste des fichiers JS dans backend ==="
+                docker run --rm \
+                    -v ${WORKSPACE}:/workspace \
+                    returntocorp/semgrep:latest \
+                    sh -c "
+                        echo 'Fichiers JS trouvés :'
+                        find /workspace/backend -name '*.js' -type f | head -20
+                        echo ''
+                        echo 'Total JS files :'
+                        find /workspace/backend -name '*.js' -type f | wc -l
+                    "
                 
-                if [ -d "backend" ]; then
-                    echo "✅ backend directory exists"
-                fi
-                
-                # Solution : --no-git-ignore pour ignorer .gitignore
+                echo "=== Lancement de Semgrep avec debug ==="
                 docker run --rm \
                     -v ${WORKSPACE}:/workspace \
                     returntocorp/semgrep:latest \
                     semgrep scan \
                     --config=auto \
                     --no-git-ignore \
-                    --verbose \
-                    /workspace/backend
-                
-                echo "✅ Scan completed"
+                    --debug \
+                    /workspace/backend 2>&1 | head -100
             '''
         }
     }
