@@ -2,15 +2,15 @@ pipeline {
     agent any
     
     environment {
-        DOCKER_REGISTRY = 'docker.io'
-        DOCKER_IMAGE_BACKEND = 'houdanasr/taskmanager-backend'
-        DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
-        SONAR_HOST_URL = 'http://host.docker.internal:9000'
-        DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
-        SONAR_TOKEN = credentials('sonarqube-token')
-        KUBECONFIG = '/var/jenkins_home/.kube/config'
-        NODE_ENV = 'test'
-    }
+    DOCKER_REGISTRY = 'docker.io'
+    DOCKER_IMAGE_BACKEND = 'houdanasr/taskmanager-backend'
+    DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
+    SONAR_HOST_URL = 'http://host.docker.internal:9000'
+    DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
+    SONAR_TOKEN = credentials('sonarqube-token')
+    KUBECONFIG = '/var/jenkins_home/.kube/config'
+    HOST_WORKSPACE_BACKEND = '/var/lib/docker/volumes/jenkins_home/_data/workspace/taskmanager-pipeline/backend'
+}
     
     stages {
         stage('Fix Docker Socket') {
@@ -59,14 +59,11 @@ pipeline {
     steps {
         withSonarQubeEnv('SonarQube') {
             sh '''
-                echo "=== Vérif accès fichiers depuis le contexte scanner ==="
-                docker run --rm -v $(pwd)/backend:/usr/src sonarsource/sonar-scanner-cli ls -la /usr/src
-
                 docker run --rm \
                   --name sonar-scan-$BUILD_NUMBER \
                   -e SONAR_HOST_URL=$SONAR_HOST_URL \
                   -e SONAR_TOKEN=$SONAR_TOKEN \
-                  -v $(pwd)/backend:/usr/src \
+                  -v ${HOST_WORKSPACE_BACKEND}:/usr/src \
                   -v sonar-scannerwork-$BUILD_NUMBER:/tmp/.scannerwork \
                   sonarsource/sonar-scanner-cli \
                   -Dsonar.projectKey=taskmanager-backend \
@@ -80,15 +77,11 @@ pipeline {
                 CID=$(docker create -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork alpine true)
                 docker cp $CID:/scannerwork/report-task.txt ./report-task.txt || echo "copy failed"
                 docker rm $CID
-
-                ls -la report-task.txt || echo "report-task.txt still not found"
-
                 docker volume rm sonar-scannerwork-$BUILD_NUMBER || true
             '''
         }
     }
 }
-
 stage('SonarQube Quality Gate') {
     steps {
         script {
