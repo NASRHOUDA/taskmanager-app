@@ -61,6 +61,7 @@ pipeline {
             sh '''
                 rm -rf .scannerwork
                 mkdir -p .scannerwork
+                chmod -R 777 .scannerwork
 
                 docker run --rm \
                   -e SONAR_HOST_URL=$SONAR_HOST_URL \
