@@ -120,55 +120,34 @@ pipeline {
             }
         }
 
-        stage('Semgrep SAST') {
+       stage('Semgrep SAST') {
     steps {
-        script {
-            // Créer un fichier .semgrepignore pour ignorer node_modules
-            sh '''
-                cat > .semgrepignore << EOF
-node_modules/
-coverage/
-dist/
-build/
-*.min.js
-EOF
-            '''
+        sh '''
+            echo "🔍 Scanning with Semgrep..."
             
-            // Scanner avec Semgrep (avec debug)
-            sh '''
-                echo "🔍 Scanning backend with Semgrep..."
-                
-                # Vérifier que le dossier backend existe
-                if [ ! -d "backend" ]; then
-                    echo "❌ ERROR: backend directory not found!"
-                    exit 1
-                fi
-                
-                echo "Files to scan:"
-                find backend -name "*.js" -type f | head -10
-                
-                # Lancer Semgrep
-                docker run --rm \
-                  -v "$(pwd)":/src \
-                  -w /src \
-                  returntocorp/semgrep:latest \
-                  semgrep scan \
-                    --config=auto \
-                    --include="backend/**/*.js" \
-                    --exclude="backend/node_modules/**" \
-                    --exclude="backend/coverage/**" \
-                    --json \
-                    --output=/src/semgrep-report.json
-                
-                echo "✅ Semgrep scan completed"
-                
-                # Afficher le résumé
-                if [ -f semgrep-report.json ]; then
-                    COUNT=$(grep -o '"results"' semgrep-report.json | wc -l || echo "0")
-                    echo "📊 Report saved with findings"
-                fi
-            '''
-        }
+            # Version simple qui fonctionne à coup sûr
+            docker run --rm \
+              -v $(pwd):/src \
+              -w /src \
+              returntocorp/semgrep:latest \
+              semgrep scan \
+                --config=auto \
+                --exclude="*/node_modules/*" \
+                --exclude="*/coverage/*" \
+                --exclude="*/dist/*" \
+                --exclude="*/build/*" \
+                --json \
+                --output=semgrep-report.json \
+                /src/backend
+            
+            echo "✅ Semgrep completed"
+            
+            # Afficher le nombre de findings
+            if [ -f semgrep-report.json ]; then
+                echo "📊 Report saved to semgrep-report.json"
+                ls -lh semgrep-report.json
+            fi
+        '''
     }
 }
         
