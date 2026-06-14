@@ -207,7 +207,24 @@ pipeline {
                 }
             }
         }
-        
+        stage('Update Kubernetes Manifests') {
+    steps {
+        withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+            sh '''
+                git config user.email "jenkins@taskmanager.com"
+                git config user.name "Jenkins"
+                
+                sed -i "s|houdanasr/taskmanager-backend:.*|houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
+                sed -i "s|houdanasr/taskmanager-frontend:.*|houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
+                
+                git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
+                git commit -m "Update image tags to build ${BUILD_NUMBER} [skip ci]" || echo "Nothing to commit"
+                
+                git push https://${GITHUB_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
+            '''
+        }
+    }
+}
         // ✅ Fix #2 — Secret Kubernetes injecté depuis Jenkins credentials
         stage('Deploy to Kubernetes') {
             steps {
