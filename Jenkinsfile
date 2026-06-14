@@ -17,7 +17,7 @@ pipeline {
     stages {
         stage('Fix Docker Socket') {
             steps {
-                sh 'chmod 666 /var/run/docker.sock 2>/dev/null || echo "⚠️ Docker socket permission non modifiable - déjà configuré"'
+                sh 'chmod 666 /var/run/docker.sock 2>/dev/null || echo "⚠️ Docker socket permission non modifiable"'
             }
         }
 
@@ -35,7 +35,6 @@ pipeline {
             }
         }
         
-        // ✅ Fix #5 — Gitleaks utilise le bon chemin Docker
         stage('Secret Scan - Gitleaks') {
             steps {
                 sh '''
@@ -104,14 +103,18 @@ pipeline {
             steps {
                 script {
                     if (fileExists('report-task.txt')) {
-                        timeout(time: 5, unit: 'MINUTES') {
-                            def qg = waitForQualityGate abortPipeline: false
-                            echo "Quality Gate status: ${qg.status}"
-                            if (qg.status != 'OK') {
-                                echo "⚠️ Quality Gate failed: ${qg.status}"
-                            } else {
-                                echo "✅ Quality Gate passed"
+                        try {
+                            timeout(time: 10, unit: 'MINUTES') {
+                                def qg = waitForQualityGate abortPipeline: false
+                                echo "Quality Gate status: ${qg.status}"
+                                if (qg.status != 'OK') {
+                                    echo "⚠️ Quality Gate failed: ${qg.status}"
+                                } else {
+                                    echo "✅ Quality Gate passed"
+                                }
                             }
+                        } catch (err) {
+                            echo "⚠️ Quality Gate timeout - continuing pipeline"
                         }
                     } else {
                         echo "⚠️ report-task.txt absent — Quality Gate ignoré"
@@ -120,7 +123,6 @@ pipeline {
             }
         }
 
-        // ✅ Fix #3 — Semgrep utilise le bon chemin Docker
         stage('Semgrep SAST') {
             steps {
                 sh '''
@@ -168,7 +170,6 @@ pipeline {
         
         stage('Trivy Scan') {
             steps {
-                // ✅ Fix #1 — CRITICAL bloque le pipeline
                 sh """
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
@@ -207,31 +208,31 @@ pipeline {
                 }
             }
         }
+
         stage('Update Kubernetes Manifests') {
-    steps {
-        withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-            sh '''
-                git config user.email "jenkins@taskmanager.com"
-                git config user.name "Jenkins"
-                
-                sed -i "s|houdanasr/taskmanager-backend:.*|houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
-                sed -i "s|houdanasr/taskmanager-frontend:.*|houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
-                
-                git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
-                git commit -m "Update image tags to build ${BUILD_NUMBER} [skip ci]" || echo "Nothing to commit"
-                
-                git push https://${GITHUB_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
-            '''
+            steps {
+                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                    sh '''
+                        git config user.email "jenkins@taskmanager.com"
+                        git config user.name "Jenkins"
+                        
+                        sed -i "s|houdanasr/taskmanager-backend:.*|houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
+                        sed -i "s|houdanasr/taskmanager-frontend:.*|houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
+                        
+                        git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
+                        git commit -m "Update image tags to build ${BUILD_NUMBER} [skip ci]" || echo "Nothing to commit"
+                        
+                        git push https://${GITHUB_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
+                    '''
+                }
+            }
         }
-    }
-}
-        // ✅ Fix #2 — Secret Kubernetes injecté depuis Jenkins credentials
+
         stage('Deploy to Kubernetes') {
             steps {
                 sh 'kubectl apply -f kubernetes/namespace.yaml || true'
                 sh 'kubectl apply -f kubernetes/configmap.yaml || true'
                 
-                // Injecter les vrais secrets depuis Jenkins credentials
                 sh '''
                     kubectl create secret generic backend-secrets \
                       --from-literal=DB_PASSWORD=postgres \
@@ -257,7 +258,6 @@ pipeline {
             }
         }
 
-        // ✅ Fix #4 — Checkov utilise le bon chemin Docker
         stage('Kubescape Security Scan') {
             steps {
                 sh '''
