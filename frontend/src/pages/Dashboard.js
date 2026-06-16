@@ -303,8 +303,8 @@ function Dashboard() {
               <option value="all">Toutes priorités</option>
               <option value="urgent">Urgent</option>
               <option value="high">Haute</option>
-              <option value="medium">Moyenne</option>
-              <option value="low">Basse</option>
+              <option value="medium">Moyenne 9</option>
+              <option value="low">Basse 9</option>
             </select>
             {(filterStatus !== "all" || filterPriority !== "all") && (
               <button style={S.btnReset} onClick={() => { setFilterStatus("all"); setFilterPriority("all"); }}>
