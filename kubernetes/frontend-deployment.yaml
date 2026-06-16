@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: houdanasr/taskmanager-frontend:80
+        image: houdanasr/taskmanager-frontend:82
         imagePullPolicy: Always
         ports:
         - containerPort: 80
