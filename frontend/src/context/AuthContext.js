@@ -8,6 +8,7 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -33,6 +34,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
+      setError(null);
       const response = await api.post("/auth/login", { email, password });
       const { token, user } = response.data;
       localStorage.setItem("token", token);
@@ -41,20 +43,26 @@ export const AuthProvider = ({ children }) => {
       return true;
     } catch (error) {
       console.error("Login error:", error);
+      setError(error.response?.data?.message || "Erreur de connexion");
       return false;
     }
   };
 
   const register = async (name, email, password) => {
     try {
+      setError(null);
       const response = await api.post("/auth/register", { name, email, password });
-      const { token, user } = response.data;
-      localStorage.setItem("token", token);
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-      setUser(user);
+      // Si votre API renvoie un token après l'inscription
+      if (response.data.token) {
+        const { token, user } = response.data;
+        localStorage.setItem("token", token);
+        api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+        setUser(user);
+      }
       return true;
     } catch (error) {
       console.error("Register error:", error);
+      setError(error.response?.data?.message || "Erreur d'inscription");
       return false;
     }
   };
@@ -63,10 +71,11 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("token");
     delete api.defaults.headers.common["Authorization"];
     setUser(null);
+    setError(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, error, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

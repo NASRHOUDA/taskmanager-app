@@ -5,7 +5,6 @@ const cookieParser = require("cookie-parser");
 const passport = require("passport");
 
 const authRoutes = require("./routes/auth.routes");
-const taskRoutes = require("./routes/task.routes");
 
 require("./config/passport");
 
@@ -18,7 +17,6 @@ app.use(cookieParser());
 app.use(passport.initialize());
 
 app.use("/api/auth", authRoutes);
-app.use("/api/tasks", taskRoutes);
 
 app.get("/health", (req, res) => {
   res.json({ status: "OK", timestamp: new Date() });

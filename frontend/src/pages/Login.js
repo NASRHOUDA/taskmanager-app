@@ -234,23 +234,23 @@ function Login() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const token = params.get("token");
-    if (token) {
-      localStorage.setItem("token", token);
-      window.location.href = "/";
-    }
-  }, [location]);
+  const params = new URLSearchParams(location.search);
+  const token = params.get("token");
+  if (token) {
+    localStorage.setItem("token", token);
+    window.location.href = "/home";  // ← Redirige vers "/home"
+  }
+}, [location]);
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    const success = await login(email, password);
-    setLoading(false);
-    if (success) navigate("/");
-    else setError("Invalid email or password. Please try again.");
-  };
+  e.preventDefault();
+  setError("");
+  setLoading(true);
+  const success = await login(email, password);
+  setLoading(false);
+  if (success) navigate("/home");  // ← Redirige vers "/home"
+  else setError("Invalid email or password. Please try again.");
+};
 
   const handleGoogleLogin = () => {
     window.location.href = "http://localhost:5000/api/auth/google";  

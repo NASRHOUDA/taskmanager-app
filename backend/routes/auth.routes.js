@@ -23,8 +23,8 @@ router.get('/google/callback',
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-    // Rediriger vers le dashboard avec le token
-    const redirectUrl = 'http://localhost:3000/dashboard?token=' + token;
+    // Rediriger vers /home avec le token (au lieu de /dashboard)
+    const redirectUrl = 'http://localhost:3000/home?token=' + token;
     console.log('🔀 Redirecting to:', redirectUrl);
     res.redirect(redirectUrl);
   }

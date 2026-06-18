@@ -15,9 +15,5 @@ const sequelize = new Sequelize(
 );
 
 const User = require("./User")(sequelize);
-const Task = require("./Task")(sequelize);
 
-User.hasMany(Task, { foreignKey: "userId", as: "tasks" });
-Task.belongsTo(User, { foreignKey: "userId", as: "user" });
-
-module.exports = { sequelize, User, Task };
+module.exports = { sequelize, User };
