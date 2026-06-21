@@ -78,14 +78,14 @@ pipeline {
                 stage('Backend Install') {
                     steps {
                         dir('backend') {
-                            sh 'npm ci'
+                            sh 'npm ci --omit=optional'
                         }
                     }
                 }
                 stage('Frontend Install') {
                     steps {
                         dir('frontend') {
-                            sh 'npm ci'
+                            sh 'npm ci --omit=optional'
                         }
                     }
                 }
