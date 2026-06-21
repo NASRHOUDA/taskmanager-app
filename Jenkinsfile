@@ -78,7 +78,7 @@ pipeline {
                 stage('Backend Install') {
                     steps {
                         dir('backend') {
-                            sh 'rm -rf node_modules && npm ci --omit=optional'
+                            sh 'rm -rf node_modules && npm ci'
                         }
                     }
                 }
