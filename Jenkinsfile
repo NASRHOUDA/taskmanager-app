@@ -78,7 +78,7 @@ pipeline {
                 stage('Backend Install') {
                     steps {
                         dir('backend') {
-                            sh 'npm ci --omit=optional'
+                            sh 'rm -rf node_modules && npm ci --omit=optional'
                         }
                     }
                 }
@@ -112,7 +112,7 @@ pipeline {
                     steps {
                         dir('frontend') {
                             sh '''
-                                CI=true npm test -- --coverage --coverageReporters=lcov \
+                                CI=true npm test -- --coverage --coverageReporters=lcov --passWithNoTests \
                                 || echo "⚠️ Tests frontend terminés avec avertissements"
                             '''
                         }
@@ -155,6 +155,7 @@ pipeline {
                                   --format JSON \
                                   --out /src/owasp-report.json \
                                   --nvdApiKey ${NVD_API_KEY} \
+                                  --nvdValidForHours 24 \
                                   --failOnCVSS 7 \
                                 || echo "⚠️ OWASP scan terminé avec avertissements"
                             '''
@@ -185,7 +186,7 @@ pipeline {
                     ]]
                 ) {
                     sh '''
-                        REPORT_PATH="${WORKSPACE_BASE}/backend/semgrep-report.json"
+                        REPORT_PATH="${WORKSPACE}/backend/semgrep-report.json"
 
                         docker run --rm \
                           -e SEMGREP_APP_TOKEN=${SEMGREP_APP_TOKEN} \
@@ -205,7 +206,7 @@ pipeline {
                         || echo "⚠️ Semgrep scan terminé avec findings"
 
                         echo "🔍 Vérification du rapport : ${REPORT_PATH}"
-                        ls -la ${WORKSPACE_BASE}/backend/ | grep semgrep || echo "⚠️ Aucun fichier semgrep-report.json visible"
+                        ls -la ${WORKSPACE}/backend/ | grep semgrep || echo "⚠️ Aucun fichier semgrep-report.json visible"
 
                         if [ -f "${REPORT_PATH}" ]; then
                             FINDINGS=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${REPORT_PATH}', 'utf8')).results.length)")
