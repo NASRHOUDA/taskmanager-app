@@ -51,7 +51,7 @@ pipeline {
             steps {
                 withVault(
                     configuration: [
-                        vaultUrl: 'http://vault.vault.svc.cluster.local:8200',
+                        vaultUrl: 'http://host.docker.internal:8200',
                         vaultCredentialId: 'vault-approle-jenkins'
                     ],
                     vaultSecrets: [[
@@ -139,7 +139,7 @@ pipeline {
             steps {
                 withVault(
                     configuration: [
-                        vaultUrl: 'http://vault.vault.svc.cluster.local:8200',
+                        vaultUrl: 'http://host.docker.internal:8200',
                         vaultCredentialId: 'vault-approle-jenkins'
                     ],
                     vaultSecrets: [[
@@ -270,7 +270,7 @@ pipeline {
             steps {
                 withVault(
                     configuration: [
-                        vaultUrl: 'http://vault.vault.svc.cluster.local:8200',
+                        vaultUrl: 'http://host.docker.internal:8200',
                         vaultCredentialId: 'vault-approle-jenkins'
                     ],
                     vaultSecrets: [[
