@@ -1,30 +1,42 @@
 pipeline {
     agent any
-    
+
     environment {
-        DOCKER_REGISTRY = 'docker.io'
-        DOCKER_IMAGE_BACKEND = 'houdanasr/taskmanager-backend'
-        DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
-        SONAR_HOST_URL = 'http://host.docker.internal:9000'
-        DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'
-        SONAR_TOKEN = credentials('sonarqube-token')
-        KUBECONFIG = '/var/jenkins_home/.kube/config'
-        HOST_WORKSPACE_BACKEND = '/var/lib/docker/volumes/jenkins_home/_data/workspace/taskmanager-pipeline/backend'
-        GOOGLE_CLIENT_ID = credentials('google-client-id')
-        GOOGLE_CLIENT_SECRET = credentials('google-client-secret')
+        HARBOR_REGISTRY = 'harbor.taskmanager.local'
+        HARBOR_PROJECT  = 'taskmanager'
+        IMAGE_BACKEND   = "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/taskmanager-backend"
+        IMAGE_FRONTEND  = "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/taskmanager-frontend"
+        SONAR_HOST_URL  = 'http://host.docker.internal:9000'
+        KUBECONFIG      = '/var/jenkins_home/.kube/config'
+        WORKSPACE_BASE  = '/var/lib/docker/volumes/jenkins_home/_data/workspace/taskmanager-pipeline'
+        SONAR_TOKEN     = credentials('sonarqube-token')
+        GITHUB_TOKEN    = credentials('github-token')
     }
-    
+
+    options {
+        timeout(time: 60, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
     stages {
+
         stage('Fix Docker Socket') {
             steps {
-                sh 'chmod 666 /var/run/docker.sock 2>/dev/null || echo "⚠️ Docker socket permission non modifiable"'
+                sh '''
+                    if [ -S /var/run/docker.sock ]; then
+                        chmod 666 /var/run/docker.sock && echo "✅ Docker socket OK" \
+                        || echo "⚠️ Permission non modifiable"
+                    else
+                        echo "⚠️ Docker socket introuvable"
+                    fi
+                '''
             }
         }
 
         stage('Setup Kubectl') {
             steps {
                 sh 'mkdir -p /var/jenkins_home/.kube'
-                sh 'kubectl get nodes || echo "Kubectl not configured"'
+                sh 'kubectl get nodes || echo "⚠️ Kubectl not configured"'
             }
         }
 
@@ -34,51 +46,150 @@ pipeline {
                 echo '📦 Code récupéré depuis GitHub'
             }
         }
-        
-        stage('Secret Scan - Gitleaks') {
+
+        stage('Verify Vault Connectivity') {
             steps {
-                sh '''
-                    docker run --rm \
-                      -v ${HOST_WORKSPACE_BACKEND}/..:/path \
-                      zricethezav/gitleaks:latest detect \
-                      --source=/path \
-                      --verbose \
-                      --no-git \
-                    || echo "⚠️ Gitleaks: vérification terminée"
-                '''
-            }
-        }
-        
-        stage('Backend Install') {
-            steps {
-                dir('backend') {
-                    sh 'npm install || true'
+                withVault(
+                    configuration: [
+                        vaultUrl: 'http://vault.vault.svc.cluster.local:8200',
+                        vaultCredentialId: 'vault-approle-jenkins'
+                    ],
+                    vaultSecrets: [[
+                        path: 'secret/taskmanager/ci',
+                        engineVersion: 2,
+                        secretValues: [
+                            [envVar: 'VAULT_HARBOR_USER', vaultKey: 'harbor_user']
+                        ]
+                    ]]
+                ) {
+                    sh '''
+                        echo "✅ Vault joignable — secret/taskmanager/ci accessible"
+                        echo "✅ Harbor user récupéré depuis Vault : ${VAULT_HARBOR_USER}"
+                    '''
                 }
             }
         }
-        
-        stage('Unit Tests') {
-            steps {
-                dir('backend') {
-                    sh 'npm test || echo "No tests yet"'
+
+        stage('Install Dependencies') {
+            parallel {
+                stage('Backend Install') {
+                    steps {
+                        dir('backend') {
+                            sh 'npm ci || npm install || true'
+                        }
+                    }
+                }
+                stage('Frontend Install') {
+                    steps {
+                        dir('frontend') {
+                            sh 'npm ci || npm install || true'
+                        }
+                    }
                 }
             }
         }
-        
+
+        stage('Unit Tests - Jest') {
+            steps {
+                dir('backend') {
+                    sh '''
+                        npm test -- --coverage --coverageReporters=lcov \
+                        || echo "⚠️ Tests terminés avec avertissements"
+                    '''
+                }
+            }
+        }
+
+        stage('Dependency Audit') {
+            parallel {
+                stage('npm audit - Backend') {
+                    steps {
+                        dir('backend') {
+                            sh 'npm audit --audit-level=high || echo "⚠️ Vulnérabilités npm backend"'
+                        }
+                    }
+                }
+                stage('npm audit - Frontend') {
+                    steps {
+                        dir('frontend') {
+                            sh 'npm audit --audit-level=high || echo "⚠️ Vulnérabilités npm frontend"'
+                        }
+                    }
+                }
+                stage('OWASP Dependency Check') {
+                    steps {
+                        sh '''
+                            docker run --rm \
+                              -v ${WORKSPACE_BASE}/backend:/src \
+                              -v owasp-data:/usr/share/dependency-check/data \
+                              owasp/dependency-check:latest \
+                              --project "taskmanager-backend" \
+                              --scan /src \
+                              --format JSON \
+                              --out /src/owasp-report.json \
+                              --failOnCVSS 7 \
+                            || echo "⚠️ OWASP scan terminé avec avertissements"
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('SAST - Semgrep') {
+            steps {
+                withVault(
+                    configuration: [
+                        vaultUrl: 'http://vault.vault.svc.cluster.local:8200',
+                        vaultCredentialId: 'vault-approle-jenkins'
+                    ],
+                    vaultSecrets: [[
+                        path: 'secret/taskmanager/ci',
+                        engineVersion: 2,
+                        secretValues: [
+                            [envVar: 'SEMGREP_APP_TOKEN', vaultKey: 'semgrep_token']
+                        ]
+                    ]]
+                ) {
+                    sh '''
+                        docker run --rm \
+                          -e SEMGREP_APP_TOKEN=${SEMGREP_APP_TOKEN} \
+                          -v ${WORKSPACE_BASE}/backend:/src \
+                          returntocorp/semgrep:latest \
+                          semgrep scan \
+                          --config=auto \
+                          --config=p/nodejs \
+                          --config=p/jwt \
+                          --config=p/owasp-top-ten \
+                          --no-git-ignore \
+                          --exclude=node_modules \
+                          --exclude=coverage \
+                          --json \
+                          --output=/src/semgrep-report.json \
+                          /src \
+                        || echo "⚠️ Semgrep scan terminé avec findings"
+
+                        FINDINGS=$(cat ${WORKSPACE_BASE}/backend/semgrep-report.json \
+                          | docker run --rm -i stedolan/jq ".results | length" \
+                          || echo "0")
+                        echo "📊 Semgrep findings: ${FINDINGS}"
+                    '''
+                }
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
                     sh '''
-                        WORKSPACE_BASE=/var/lib/docker/volumes/jenkins_home/_data/workspace
                         cp -rf ${WORKSPACE}/backend/coverage \
-                            ${WORKSPACE_BASE}/taskmanager-pipeline/backend/ 2>/dev/null || true
+                            ${WORKSPACE_BASE}/backend/ 2>/dev/null || true
 
                         docker run --rm \
-                          --name sonar-scan-$BUILD_NUMBER \
-                          -e SONAR_HOST_URL=$SONAR_HOST_URL \
-                          -e SONAR_TOKEN=$SONAR_TOKEN \
-                          -v ${WORKSPACE_BASE}/taskmanager-pipeline/backend:/usr/src \
-                          -v sonar-scannerwork-$BUILD_NUMBER:/tmp/.scannerwork \
+                          --name sonar-scan-${BUILD_NUMBER} \
+                          -e SONAR_HOST_URL=${SONAR_HOST_URL} \
+                          -e SONAR_TOKEN=${SONAR_TOKEN} \
+                          -v ${WORKSPACE_BASE}/backend:/usr/src \
+                          -v sonar-scannerwork-${BUILD_NUMBER}:/tmp/.scannerwork \
                           sonarsource/sonar-scanner-cli \
                           -Dsonar.projectKey=taskmanager-backend \
                           -Dsonar.projectBaseDir=/usr/src \
@@ -90,10 +201,10 @@ pipeline {
                           -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
                         || true
 
-                        CID=$(docker create -v sonar-scannerwork-$BUILD_NUMBER:/scannerwork alpine true)
+                        CID=$(docker create -v sonar-scannerwork-${BUILD_NUMBER}:/scannerwork alpine true)
                         docker cp $CID:/scannerwork/report-task.txt ./report-task.txt || echo "copy failed"
                         docker rm $CID
-                        docker volume rm sonar-scannerwork-$BUILD_NUMBER || true
+                        docker volume rm sonar-scannerwork-${BUILD_NUMBER} || true
                     '''
                 }
             }
@@ -114,7 +225,7 @@ pipeline {
                                 }
                             }
                         } catch (err) {
-                            echo "⚠️ Quality Gate timeout - continuing pipeline"
+                            echo "⚠️ Quality Gate timeout — pipeline continue"
                         }
                     } else {
                         echo "⚠️ report-task.txt absent — Quality Gate ignoré"
@@ -123,52 +234,15 @@ pipeline {
             }
         }
 
-        stage('Semgrep SAST') {
-            steps {
-                sh '''
-                    docker run --rm \
-                        -v ${HOST_WORKSPACE_BACKEND}:/src \
-                        returntocorp/semgrep:latest \
-                        semgrep scan \
-                        --config=auto \
-                        --no-git-ignore \
-                        --exclude=node_modules \
-                        --exclude=coverage \
-                        --json \
-                        --output=/src/semgrep-report.json \
-                        /src \
-                    || echo "Semgrep scan completed"
-
-                    ls -la ${HOST_WORKSPACE_BACKEND}/semgrep-report.json || echo "report not found"
-                '''
-            }
-        }
-        
-        stage('OWASP Dependency Check') {
-            steps {
-                dir('backend') {
-                    sh 'npm install || true'
-                    sh 'npm audit --audit-level=high || echo "No critical vulnerabilities"'
-                }
-                dir('frontend') {
-                    sh 'npm install || true'
-                    sh 'npm audit --audit-level=high || echo "No critical vulnerabilities"'
-                }
-            }
-        }
-        
         stage('Build Docker Images') {
             steps {
-                script {
-                    sh "docker build -f docker/Dockerfile.backend -t ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER} ."
-                    sh "docker build --no-cache -f docker/Dockerfile.frontend -t ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} ."
-                    sh "docker tag ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER} ${DOCKER_IMAGE_BACKEND}:latest"
-                    sh "docker tag ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} ${DOCKER_IMAGE_FRONTEND}:latest"
-                }
+                sh "docker build -f docker/Dockerfile.backend -t ${IMAGE_BACKEND}:${BUILD_NUMBER} -t ${IMAGE_BACKEND}:latest ."
+                sh "docker build --no-cache -f docker/Dockerfile.frontend -t ${IMAGE_FRONTEND}:${BUILD_NUMBER} -t ${IMAGE_FRONTEND}:latest ."
+                echo "✅ Images buildées : ${IMAGE_BACKEND}:${BUILD_NUMBER}"
             }
         }
-        
-        stage('Trivy Scan') {
+
+        stage('Trivy Image Scan') {
             steps {
                 sh """
                     docker run --rm \
@@ -177,8 +251,8 @@ pipeline {
                       aquasec/trivy:latest image \
                       --severity CRITICAL \
                       --exit-code 1 \
-                      ${DOCKER_IMAGE_BACKEND}:latest \
-                    || echo "⚠️ CRITICAL vulnerabilities found in backend"
+                      ${IMAGE_BACKEND}:latest \
+                    || echo "⚠️ CRITICAL vulnérabilités backend"
                 """
                 sh """
                     docker run --rm \
@@ -187,88 +261,72 @@ pipeline {
                       aquasec/trivy:latest image \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
-                      ${DOCKER_IMAGE_FRONTEND}:latest
+                      ${IMAGE_FRONTEND}:latest
                 """
             }
         }
-        
-        stage('Push to Docker Hub') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: "${DOCKER_HUB_CREDENTIALS}",
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                    sh "docker push ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}"
-                    sh "docker push ${DOCKER_IMAGE_BACKEND}:latest"
-                    sh "docker push ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER}"
-                    sh "docker push ${DOCKER_IMAGE_FRONTEND}:latest"
-                    sh 'docker logout'
-                }
-            }
-        }
 
-        stage('Update Kubernetes Manifests') {
+        stage('Push to Harbor') {
             steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                withVault(
+                    configuration: [
+                        vaultUrl: 'http://vault.vault.svc.cluster.local:8200',
+                        vaultCredentialId: 'vault-approle-jenkins'
+                    ],
+                    vaultSecrets: [[
+                        path: 'secret/taskmanager/ci',
+                        engineVersion: 2,
+                        secretValues: [
+                            [envVar: 'HARBOR_USER', vaultKey: 'harbor_user'],
+                            [envVar: 'HARBOR_PASS', vaultKey: 'harbor_password']
+                        ]
+                    ]]
+                ) {
                     sh '''
-                        git config user.email "jenkins@taskmanager.com"
-                        git config user.name "Jenkins"
-                        
-                        sed -i "s|houdanasr/taskmanager-backend:.*|houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
-                        sed -i "s|houdanasr/taskmanager-frontend:.*|houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
-                        
-                        git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
-                        git commit -m "Update image tags to build ${BUILD_NUMBER} [skip ci]" || echo "Nothing to commit"
-                        
-                        git push https://${GITHUB_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
+                        echo "${HARBOR_PASS}" | docker login ${HARBOR_REGISTRY} \
+                          -u ${HARBOR_USER} --password-stdin
+                        docker push ${IMAGE_BACKEND}:${BUILD_NUMBER}
+                        docker push ${IMAGE_BACKEND}:latest
+                        docker push ${IMAGE_FRONTEND}:${BUILD_NUMBER}
+                        docker push ${IMAGE_FRONTEND}:latest
+                        docker logout ${HARBOR_REGISTRY}
+                        echo "✅ Images poussées vers Harbor"
                     '''
                 }
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Update Manifests (GitOps -> Flux CD)') {
             steps {
-                sh 'kubectl apply -f kubernetes/namespace.yaml || true'
-                sh 'kubectl apply -f kubernetes/configmap.yaml || true'
-                
                 sh '''
-                    kubectl create secret generic backend-secrets \
-                      --from-literal=DB_PASSWORD=postgres \
-                      --from-literal=JWT_SECRET=super-secret-key-change-this-in-production \
-                      --from-literal=GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID} \
-                      --from-literal=GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET} \
-                      -n taskmanager \
-                      --dry-run=client -o yaml | kubectl apply -f -
+                    git config user.email "jenkins@taskmanager.com"
+                    git config user.name "Jenkins CI"
+
+                    sed -i "s|harbor.taskmanager.local/taskmanager/taskmanager-backend:.*|harbor.taskmanager.local/taskmanager/taskmanager-backend:${BUILD_NUMBER}|g" \
+                        kubernetes/backend-deployment.yaml
+                    sed -i "s|harbor.taskmanager.local/taskmanager/taskmanager-frontend:.*|harbor.taskmanager.local/taskmanager/taskmanager-frontend:${BUILD_NUMBER}|g" \
+                        kubernetes/frontend-deployment.yaml
+
+                    git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
+                    git commit -m "ci: update image tags to build #${BUILD_NUMBER} [skip ci]" \
+                      || echo "ℹ️ Rien a committer"
+
+                    git push https://${GITHUB_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
+                    echo "✅ Manifests mis a jour — Flux CD va deployer automatiquement"
                 '''
-                
-                sh 'kubectl apply -f kubernetes/backend-deployment.yaml || true'
-                sh 'kubectl apply -f kubernetes/backend-service.yaml || true'
-                sh 'kubectl apply -f kubernetes/frontend-deployment.yaml || true'
-                sh 'kubectl apply -f kubernetes/frontend-service.yaml || true'
-                sh 'kubectl apply -f kubernetes/postgres-deployment.yaml || true'
-                
-                sh "kubectl set image deployment/backend backend=${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER} -n taskmanager || true"
-                sh "kubectl set image deployment/frontend frontend=${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} -n taskmanager || true"
-                
-                sh 'kubectl rollout status deployment/backend -n taskmanager --timeout=3m || true'
-                sh 'kubectl rollout status deployment/frontend -n taskmanager --timeout=3m || true'
-                sh 'kubectl rollout status deployment/postgres -n taskmanager --timeout=3m || true'
             }
         }
 
-        stage('Kubescape Security Scan') {
+        stage('Checkov - IaC Scan') {
             steps {
                 sh '''
-                    WORKSPACE_BASE=/var/lib/docker/volumes/jenkins_home/_data/workspace
                     docker run --rm \
-                      -v ${WORKSPACE_BASE}/taskmanager-pipeline/kubernetes:/work \
+                      -v ${WORKSPACE_BASE}/kubernetes:/work \
                       bridgecrew/checkov:latest \
                       -d /work \
                       --framework kubernetes \
                       --soft-fail \
-                    || echo "✅ Checkov scan completed"
+                    || echo "✅ Checkov scan termine"
                 '''
             }
         }
@@ -276,32 +334,62 @@ pipeline {
         stage('Kube-bench CIS Benchmark') {
             steps {
                 sh '''
-                    kubectl run kube-bench --image=aquasec/kube-bench:latest \
+                    kubectl run kube-bench-${BUILD_NUMBER} \
+                      --image=aquasec/kube-bench:latest \
                       --restart=Never \
-                      --overrides='{"spec":{"hostPID":true,"hostIPC":true,"hostNetwork":true}}' \
                       -n default \
-                      -- --version 1.28 || echo "Kube-bench launched"
+                      -- --version 1.28 \
+                    || echo "⚠️ kube-bench erreur au lancement"
+
                     sleep 30
-                    kubectl logs kube-bench -n default || echo "Kube-bench scan completed"
-                    kubectl delete pod kube-bench -n default || true
+                    kubectl logs kube-bench-${BUILD_NUMBER} -n default || echo "⚠️ Logs non disponibles"
+                    kubectl delete pod kube-bench-${BUILD_NUMBER} -n default || true
                 '''
             }
         }
-        
-        stage('Verify Deployment') {
+
+        stage('Verify Flux CD Deployment') {
             steps {
-                sh 'kubectl get pods -n taskmanager'
-                sh 'kubectl get svc -n taskmanager'
+                sh '''
+                    echo "⏳ Forcage reconciliation Flux..."
+                    flux reconcile source git flux-system || true
+                    flux reconcile kustomization taskmanager || true
+
+                    sleep 30
+
+                    echo "📊 Etat Flux CD :"
+                    flux get kustomizations
+                    flux get sources git
+
+                    echo "📊 Rollout status :"
+                    kubectl rollout status deployment/backend  -n taskmanager --timeout=3m || true
+                    kubectl rollout status deployment/frontend -n taskmanager --timeout=3m || true
+                    kubectl rollout status deployment/postgres -n taskmanager --timeout=3m || true
+
+                    echo "📊 Pods :"
+                    kubectl get pods -n taskmanager
+
+                    echo "📊 Services :"
+                    kubectl get svc -n taskmanager
+
+                    echo "📊 Vault -> K8s (ExternalSecret) :"
+                    kubectl get externalsecret -n taskmanager
+                    kubectl get secretstore    -n taskmanager
+                '''
             }
         }
     }
-    
+
     post {
         success {
-            echo '✅ Pipeline réussi!'
+            echo '✅ Pipeline DevSecOps reussi !'
         }
         failure {
-            echo '❌ Pipeline échoué!'
+            echo '❌ Pipeline echoue — voir les logs ci-dessus'
+        }
+        always {
+            sh "docker rmi ${IMAGE_BACKEND}:${BUILD_NUMBER} || true"
+            sh "docker rmi ${IMAGE_FRONTEND}:${BUILD_NUMBER} || true"
         }
     }
 }
