@@ -22,14 +22,7 @@ pipeline {
 
         stage('Fix Docker Socket') {
             steps {
-                sh '''
-                    if [ -S /var/run/docker.sock ]; then
-                        chmod 666 /var/run/docker.sock && echo "✅ Docker socket OK" \
-                        || echo "⚠️ Permission non modifiable"
-                    else
-                        echo "⚠️ Docker socket introuvable"
-                    fi
-                '''
+                sh 'docker info > /dev/null 2>&1 && echo "✅ Docker socket OK" || echo "⚠️ Docker non accessible"'
             }
         }
 
