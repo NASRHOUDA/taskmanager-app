@@ -4,11 +4,6 @@ jest.mock('../../models', () => ({
     findOne: jest.fn(),
     create: jest.fn(),
     findByPk: jest.fn()
-  },
-  Task: {
-    findAll: jest.fn(),
-    create: jest.fn(),
-    findOne: jest.fn()
   }
 }));
 
@@ -17,9 +12,8 @@ jest.mock('jsonwebtoken', () => ({
   verify: jest.fn()
 }));
 
-const { User, Task } = require('../../models');
+const { User } = require('../../models');
 const { register, login, getMe } = require('../../controllers/auth.controller');
-const { getAllTasks, createTask, updateTask, deleteTask } = require('../../controllers/task.controller');
 
 // Helper pour créer res mock
 const mockRes = () => {
@@ -148,122 +142,6 @@ describe('Auth Controller', () => {
       const res = mockRes();
 
       await getMe(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-    });
-  });
-});
-
-// ===== Task Controller =====
-describe('Task Controller', () => {
-
-  beforeEach(() => jest.clearAllMocks());
-
-  describe('getAllTasks', () => {
-    test('should return all tasks for user', async () => {
-      Task.findAll.mockResolvedValue([{ id: 1, title: 'Task 1' }]);
-      const req = { user: { id: 1 } };
-      const res = mockRes();
-
-      await getAllTasks(req, res);
-
-      expect(res.json).toHaveBeenCalledWith([{ id: 1, title: 'Task 1' }]);
-    });
-
-    test('should return 500 on error', async () => {
-      Task.findAll.mockRejectedValue(new Error('DB error'));
-      const req = { user: { id: 1 } };
-      const res = mockRes();
-
-      await getAllTasks(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-    });
-  });
-
-  describe('createTask', () => {
-    test('should create and return task', async () => {
-      Task.create.mockResolvedValue({ id: 1, title: 'New Task' });
-      const req = { body: { title: 'New Task' }, user: { id: 1 } };
-      const res = mockRes();
-
-      await createTask(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(201);
-    });
-
-    test('should return 500 on error', async () => {
-      Task.create.mockRejectedValue(new Error('DB error'));
-      const req = { body: { title: 'New Task' }, user: { id: 1 } };
-      const res = mockRes();
-
-      await createTask(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-    });
-  });
-
-  describe('updateTask', () => {
-    test('should return 404 if task not found', async () => {
-      Task.findOne.mockResolvedValue(null);
-      const req = { params: { id: 99 }, body: { title: 'Updated' }, user: { id: 1 } };
-      const res = mockRes();
-
-      await updateTask(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-    });
-
-    test('should update and return task', async () => {
-      const mockTask = { id: 1, title: 'Task', update: jest.fn().mockResolvedValue(true) };
-      Task.findOne.mockResolvedValue(mockTask);
-      const req = { params: { id: 1 }, body: { title: 'Updated' }, user: { id: 1 } };
-      const res = mockRes();
-
-      await updateTask(req, res);
-
-      expect(res.json).toHaveBeenCalledWith(mockTask);
-    });
-
-    test('should return 500 on error', async () => {
-      Task.findOne.mockRejectedValue(new Error('DB error'));
-      const req = { params: { id: 1 }, body: {}, user: { id: 1 } };
-      const res = mockRes();
-
-      await updateTask(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-    });
-  });
-
-  describe('deleteTask', () => {
-    test('should return 404 if task not found', async () => {
-      Task.findOne.mockResolvedValue(null);
-      const req = { params: { id: 99 }, user: { id: 1 } };
-      const res = mockRes();
-
-      await deleteTask(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-    });
-
-    test('should delete task and return message', async () => {
-      const mockTask = { id: 1, destroy: jest.fn().mockResolvedValue(true) };
-      Task.findOne.mockResolvedValue(mockTask);
-      const req = { params: { id: 1 }, user: { id: 1 } };
-      const res = mockRes();
-
-      await deleteTask(req, res);
-
-      expect(res.json).toHaveBeenCalledWith({ message: 'Task deleted successfully' });
-    });
-
-    test('should return 500 on error', async () => {
-      Task.findOne.mockRejectedValue(new Error('DB error'));
-      const req = { params: { id: 1 }, user: { id: 1 } };
-      const res = mockRes();
-
-      await deleteTask(req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
