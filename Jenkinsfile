@@ -150,6 +150,16 @@ pipeline {
                                   --nvdApiKey ${NVD_API_KEY} \
                                   --nvdValidForHours 24 \
                                   --failOnCVSS 7 \
+                                || docker run --rm \
+                                  -v ${WORKSPACE_BASE}/backend:/src \
+                                  -v owasp-data:/usr/share/dependency-check/data \
+                                  owasp/dependency-check:latest \
+                                  --project "taskmanager-backend" \
+                                  --scan /src \
+                                  --format JSON \
+                                  --out /src/owasp-report.json \
+                                  --noupdate \
+                                  --failOnCVSS 7 \
                                 || echo "⚠️ OWASP scan terminé avec avertissements"
                             '''
                         }
