@@ -70,32 +70,53 @@ pipeline {
             }
         }
 
+        // FIX #1 : lock files régénérés -> npm ci strict, plus de fallback silencieux.
+        // Si npm ci échoue à nouveau ici, c'est un vrai signal qu'il faut régénérer
+        // package-lock.json en local, pas un comportement à masquer.
         stage('Install Dependencies') {
             parallel {
                 stage('Backend Install') {
                     steps {
                         dir('backend') {
-                            sh 'npm ci || npm install || true'
+                            sh 'npm ci'
                         }
                     }
                 }
                 stage('Frontend Install') {
                     steps {
                         dir('frontend') {
-                            sh 'npm ci || npm install || true'
+                            sh 'npm ci'
                         }
                     }
                 }
             }
         }
 
+        // FIX #2 : tests Jest sur backend ET frontend (avant, le frontend
+        // n'était jamais testé). collectCoverageFrom doit être configuré dans
+        // chaque package.json pour couvrir tous les fichiers source, pas
+        // seulement ceux importés par les tests existants.
         stage('Unit Tests - Jest') {
-            steps {
-                dir('backend') {
-                    sh '''
-                        npm test -- --coverage --coverageReporters=lcov \
-                        || echo "⚠️ Tests terminés avec avertissements"
-                    '''
+            parallel {
+                stage('Backend Tests') {
+                    steps {
+                        dir('backend') {
+                            sh '''
+                                npm test -- --coverage --coverageReporters=lcov \
+                                || echo "⚠️ Tests backend terminés avec avertissements"
+                            '''
+                        }
+                    }
+                }
+                stage('Frontend Tests') {
+                    steps {
+                        dir('frontend') {
+                            sh '''
+                                CI=true npm test -- --coverage --coverageReporters=lcov \
+                                || echo "⚠️ Tests frontend terminés avec avertissements"
+                            '''
+                        }
+                    }
                 }
             }
         }
@@ -116,25 +137,38 @@ pipeline {
                         }
                     }
                 }
+                // FIX #3 : ajout de la clé API NVD pour éviter le rate-limit (429)
+                // qui empêchait toute mise à jour de la base CVE et faisait
+                // échouer le scan dans son intégralité.
+                // -> Créer le credential Jenkins "nvd-api-key" (type Secret text)
+                //    avec la valeur de la clé NVD avant de lancer ce pipeline.
                 stage('OWASP Dependency Check') {
                     steps {
-                        sh '''
-                            docker run --rm \
-                              -v ${WORKSPACE_BASE}/backend:/src \
-                              -v owasp-data:/usr/share/dependency-check/data \
-                              owasp/dependency-check:latest \
-                              --project "taskmanager-backend" \
-                              --scan /src \
-                              --format JSON \
-                              --out /src/owasp-report.json \
-                              --failOnCVSS 7 \
-                            || echo "⚠️ OWASP scan terminé avec avertissements"
-                        '''
+                        withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                            sh '''
+                                docker run --rm \
+                                  -v ${WORKSPACE_BASE}/backend:/src \
+                                  -v owasp-data:/usr/share/dependency-check/data \
+                                  owasp/dependency-check:latest \
+                                  --project "taskmanager-backend" \
+                                  --scan /src \
+                                  --format JSON \
+                                  --out /src/owasp-report.json \
+                                  --nvdApiKey ${NVD_API_KEY} \
+                                  --failOnCVSS 7 \
+                                || echo "⚠️ OWASP scan terminé avec avertissements"
+                            '''
+                        }
                     }
                 }
             }
         }
 
+        // FIX #4 : remplacement de "stedolan/jq" (image cassée avec containerd
+        // récent) par un parsing Node directement sur l'agent Jenkins (déjà
+        // disponible puisqu'il exécute npm). On vérifie aussi explicitement
+        // l'existence du fichier avant de le lire, pour ne plus afficher "0"
+        // silencieusement quand le rapport est en réalité absent ou introuvable.
         stage('SAST - Semgrep') {
             steps {
                 withVault(
@@ -151,6 +185,8 @@ pipeline {
                     ]]
                 ) {
                     sh '''
+                        REPORT_PATH="${WORKSPACE_BASE}/backend/semgrep-report.json"
+
                         docker run --rm \
                           -e SEMGREP_APP_TOKEN=${SEMGREP_APP_TOKEN} \
                           -v ${WORKSPACE_BASE}/backend:/src \
@@ -168,9 +204,16 @@ pipeline {
                           /src \
                         || echo "⚠️ Semgrep scan terminé avec findings"
 
-                        FINDINGS=$(cat ${WORKSPACE_BASE}/backend/semgrep-report.json \
-                          | docker run --rm -i stedolan/jq ".results | length" \
-                          || echo "0")
+                        echo "🔍 Vérification du rapport : ${REPORT_PATH}"
+                        ls -la ${WORKSPACE_BASE}/backend/ | grep semgrep || echo "⚠️ Aucun fichier semgrep-report.json visible"
+
+                        if [ -f "${REPORT_PATH}" ]; then
+                            FINDINGS=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${REPORT_PATH}', 'utf8')).results.length)")
+                        else
+                            echo "❌ Rapport Semgrep introuvable au chemin attendu — findings NON vérifiés"
+                            FINDINGS="N/A"
+                        fi
+
                         echo "📊 Semgrep findings: ${FINDINGS}"
                     '''
                 }
