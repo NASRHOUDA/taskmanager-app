@@ -85,7 +85,7 @@ pipeline {
                 stage('Frontend Install') {
                     steps {
                         dir('frontend') {
-                            sh 'npm ci --omit=optional'
+                            sh 'npm install --omit=optional'
                         }
                     }
                 }
