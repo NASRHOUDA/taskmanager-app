@@ -20,12 +20,7 @@ pipeline {
 
     stages {
 
-        stage('Fix Docker Socket') {
-            steps {
-                sh 'docker info > /dev/null 2>&1 && echo "✅ Docker socket OK" || echo "⚠️ Docker non accessible"'
-            }
-        }
-
+        
         stage('Setup Kubectl') {
             steps {
                 sh 'mkdir -p /var/jenkins_home/.kube'
