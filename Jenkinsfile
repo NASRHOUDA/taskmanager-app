@@ -416,7 +416,25 @@ except:
                 """
             }
         }
-
+stage('Configure Docker Insecure') {
+    steps {
+        sh '''
+            # Configurer Docker dans le conteneur Jenkins
+            mkdir -p /etc/docker
+            cat > /etc/docker/daemon.json << EOF
+{
+  "insecure-registries": ["harbor.taskmanager.local"]
+}
+EOF
+            echo "✅ Docker configuré avec harbor.taskmanager.local comme insecure-registry"
+            
+            # Redémarrer le démon Docker (si possible)
+            if command -v dockerd &> /dev/null; then
+                kill -SIGHUP $(pidof dockerd) 2>/dev/null || true
+            fi
+        '''
+    }
+}
         // ============================================
         // STAGE 12: Push to Harbor
         // ============================================
