@@ -360,7 +360,7 @@ except:
                 script {
                     if (fileExists('report-task.txt')) {
                         try {
-                            timeout(time: 10, unit: 'MINUTES') {
+                            timeout(time: 1, unit: 'MINUTES') {
                                 def qg = waitForQualityGate abortPipeline: false
                                 echo "Quality Gate status: ${qg.status}"
                                 if (qg.status != 'OK') {
@@ -421,61 +421,67 @@ except:
         // STAGE 12: Push to Harbor
         // ============================================
         stage('Push to Harbor') {
-            steps {
-                script {
-                    // Récupérer les credentials Harbor depuis Vault
-                    def token = sh(script: '''
-                        curl -s -X POST \
-                          http://192.168.49.2:30200/v1/auth/approle/login \
-                          -H "Content-Type: application/json" \
-                          -d '{"role_id":"1733a07d-54cc-860f-99b3-c748782d9aa4","secret_id":"e4c8b380-afce-9e83-f5aa-9feae99bfb41"}'
-                    ''', returnStdout: true).trim()
-                    
-                    def vaultToken = sh(script: """
-                        echo '$token' | python3 -c "
+    steps {
+        script {
+            // Récupérer les secrets Harbor depuis Vault
+            def token = sh(script: '''
+                curl -s -X POST \
+                  http://192.168.49.2:30200/v1/auth/approle/login \
+                  -H "Content-Type: application/json" \
+                  -d '{"role_id":"1733a07d-54cc-860f-99b3-c748782d9aa4","secret_id":"e4c8b380-afce-9e83-f5aa-9feae99bfb41"}'
+            ''', returnStdout: true).trim()
+            
+            def vaultToken = sh(script: """
+                echo '$token' | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 print(data['auth']['client_token'])
 "
-                    """, returnStdout: true).trim()
-                    
-                    def harborSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: $vaultToken" \
-                          http://192.168.49.2:30200/v1/secret/data/taskmanager/harbor
-                    """, returnStdout: true).trim()
-                    
-                    def harborUser = sh(script: """
-                        echo '$harborSecrets' | python3 -c "
+            """, returnStdout: true).trim()
+            
+            def harborSecrets = sh(script: """
+                curl -s -H "X-Vault-Token: $vaultToken" \
+                  http://192.168.49.2:30200/v1/secret/data/taskmanager/harbor
+            """, returnStdout: true).trim()
+            
+            def harborUser = sh(script: """
+                echo '$harborSecrets' | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 print(data['data']['data']['username'])
 "
-                    """, returnStdout: true).trim()
-                    
-                    def harborPass = sh(script: """
-                        echo '$harborSecrets' | python3 -c "
+            """, returnStdout: true).trim()
+            
+            def harborPass = sh(script: """
+                echo '$harborSecrets' | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 print(data['data']['data']['password'])
 "
-                    """, returnStdout: true).trim()
-                    
-                    env.HARBOR_USER = harborUser
-                    env.HARBOR_PASS = harborPass
-                }
-                
-                sh '''
-                    echo "${HARBOR_PASS}" | docker login ${HARBOR_REGISTRY} \
-                      -u ${HARBOR_USER} --password-stdin
-                    docker push ${IMAGE_BACKEND}:${BUILD_NUMBER}
-                    docker push ${IMAGE_BACKEND}:latest
-                    docker push ${IMAGE_FRONTEND}:${BUILD_NUMBER}
-                    docker push ${IMAGE_FRONTEND}:latest
-                    docker logout ${HARBOR_REGISTRY}
-                    echo "✅ Images poussées vers Harbor"
-                '''
-            }
+            """, returnStdout: true).trim()
+            
+            env.HARBOR_USER = harborUser
+            env.HARBOR_PASS = harborPass
         }
+        
+        sh '''
+            # Docker login avec option --insecure-registry (via /etc/docker/daemon.json)
+            # Utiliser l'option de ligne de commande pour contourner le problème
+            
+            echo "${HARBOR_PASS}" | docker login harbor.taskmanager.local \
+              -u ${HARBOR_USER} --password-stdin
+            
+            # Pousser les images
+            docker push ${IMAGE_BACKEND}:${BUILD_NUMBER}
+            docker push ${IMAGE_BACKEND}:latest
+            docker push ${IMAGE_FRONTEND}:${BUILD_NUMBER}
+            docker push ${IMAGE_FRONTEND}:latest
+            
+            docker logout ${HARBOR_REGISTRY}
+            echo "✅ Images poussées vers Harbor"
+        '''
+    }
+}
 
         // ============================================
         // STAGE 13: Update Manifests (GitOps -> Flux CD)
