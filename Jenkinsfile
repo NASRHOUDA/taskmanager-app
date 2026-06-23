@@ -2,6 +2,8 @@ pipeline {
     agent any
 
     environment {
+        VAULT_URL = 'http://192.168.49.2:30200' 
+        VAULT_CRED_ID = 'vault-approle-jenkins'  
         HARBOR_REGISTRY = 'harbor.taskmanager.local'
         HARBOR_PROJECT  = 'taskmanager'
         IMAGE_BACKEND   = "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/taskmanager-backend"
@@ -39,8 +41,8 @@ pipeline {
     steps {
         withVault(
             configuration: [
-                vaultUrl: 'http://192.168.49.2:30200',  // ← HTTP au lieu de HTTPS
-                vaultCredentialId: 'vault-approle-jenkins',
+                vaultUrl: env.VAULT_URL,           // ← Utilise la variable
+                vaultCredentialId: env.VAULT_CRED_ID,  // ← Utilise la variable
                 engineVersion: 2,
                 timeout: 60
             ],
@@ -317,34 +319,35 @@ pipeline {
         }
 
         stage('Push to Harbor') {
-            steps {
-                withVault(
-                    configuration: [
-                        vaultUrl: 'http://host.docker.internal:8200',
-                        vaultCredentialId: 'vault-approle-jenkins'
-                    ],
-                    vaultSecrets: [[
-                        path: 'secret/taskmanager/ci',
-                        engineVersion: 2,
-                        secretValues: [
-                            [envVar: 'HARBOR_USER', vaultKey: 'harbor_user'],
-                            [envVar: 'HARBOR_PASS', vaultKey: 'harbor_password']
-                        ]
-                    ]]
-                ) {
-                    sh '''
-                        echo "${HARBOR_PASS}" | docker login ${HARBOR_REGISTRY} \
-                          -u ${HARBOR_USER} --password-stdin
-                        docker push ${IMAGE_BACKEND}:${BUILD_NUMBER}
-                        docker push ${IMAGE_BACKEND}:latest
-                        docker push ${IMAGE_FRONTEND}:${BUILD_NUMBER}
-                        docker push ${IMAGE_FRONTEND}:latest
-                        docker logout ${HARBOR_REGISTRY}
-                        echo "✅ Images poussées vers Harbor"
-                    '''
-                }
-            }
+    steps {
+        withVault(
+            configuration: [
+                vaultUrl: env.VAULT_URL,
+                vaultCredentialId: env.VAULT_CRED_ID,
+                engineVersion: 2
+            ],
+            vaultSecrets: [[
+                path: 'secret/data/taskmanager/harbor',
+                engineVersion: 2,
+                secretValues: [
+                    [envVar: 'HARBOR_USER', vaultKey: 'username'],
+                    [envVar: 'HARBOR_PASS', vaultKey: 'password']
+                ]
+            ]]
+        ) {
+            sh '''
+                echo "${HARBOR_PASS}" | docker login ${HARBOR_REGISTRY} \
+                  -u ${HARBOR_USER} --password-stdin
+                docker push ${IMAGE_BACKEND}:${BUILD_NUMBER}
+                docker push ${IMAGE_BACKEND}:latest
+                docker push ${IMAGE_FRONTEND}:${BUILD_NUMBER}
+                docker push ${IMAGE_FRONTEND}:latest
+                docker logout ${HARBOR_REGISTRY}
+                echo "✅ Images poussées vers Harbor"
+            '''
         }
+    }
+}
 
         stage('Update Manifests (GitOps -> Flux CD)') {
             steps {
