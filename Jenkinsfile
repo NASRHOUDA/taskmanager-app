@@ -419,19 +419,14 @@ except:
 stage('Configure Docker Insecure') {
     steps {
         sh '''
-            # Configurer Docker dans le conteneur Jenkins
-            mkdir -p /etc/docker
-            cat > /etc/docker/daemon.json << EOF
-{
-  "insecure-registries": ["harbor.taskmanager.local"]
-}
-EOF
-            echo "✅ Docker configuré avec harbor.taskmanager.local comme insecure-registry"
-            
-            # Redémarrer le démon Docker (si possible)
-            if command -v dockerd &> /dev/null; then
-                kill -SIGHUP $(pidof dockerd) 2>/dev/null || true
-            fi
+            # Créer le fichier avec sudo (si sudo est disponible)
+            echo '{"insecure-registries": ["harbor.taskmanager.local"]}' | sudo tee /etc/docker/daemon.json 2>/dev/null || \
+            # Sinon, essayer avec sh -c
+            sh -c "echo '{\"insecure-registries\": [\"harbor.taskmanager.local\"]}' > /etc/docker/daemon.json" 2>/dev/null || \
+            # Dernier recours : utiliser la config utilisateur
+            mkdir -p ~/.docker
+            echo '{"insecure-registries": ["harbor.taskmanager.local"]}' > ~/.docker/config.json
+            echo "✅ Docker configuré"
         '''
     }
 }
