@@ -416,20 +416,8 @@ except:
                 """
             }
         }
-stage('Configure Docker Insecure') {
-    steps {
-        sh '''
-            # Créer le fichier avec sudo (si sudo est disponible)
-            echo '{"insecure-registries": ["harbor.taskmanager.local"]}' | sudo tee /etc/docker/daemon.json 2>/dev/null || \
-            # Sinon, essayer avec sh -c
-            sh -c "echo '{\"insecure-registries\": [\"harbor.taskmanager.local\"]}' > /etc/docker/daemon.json" 2>/dev/null || \
-            # Dernier recours : utiliser la config utilisateur
-            mkdir -p ~/.docker
-            echo '{"insecure-registries": ["harbor.taskmanager.local"]}' > ~/.docker/config.json
-            echo "✅ Docker configuré"
-        '''
-    }
-}
+
+
         // ============================================
         // STAGE 12: Push to Harbor
         // ============================================
