@@ -39,31 +39,44 @@ pipeline {
 
         stage('Verify Vault Connectivity') {
     steps {
-        withVault(
-            configuration: [
-                vaultUrl: env.VAULT_URL,           // ← Utilise la variable
-                vaultCredentialId: env.VAULT_CRED_ID,  // ← Utilise la variable
-                engineVersion: 2,
-                timeout: 60
-            ],
-            vaultSecrets: [[
-                path: 'secret/data/taskmanager/database',
-                engineVersion: 2,
-                secretValues: [
-                    [envVar: 'DB_HOST', vaultKey: 'host'],
-                    [envVar: 'DB_PORT', vaultKey: 'port'],
-                    [envVar: 'DB_USERNAME', vaultKey: 'username'],
-                    [envVar: 'DB_PASSWORD', vaultKey: 'password'],
-                    [envVar: 'DB_NAME', vaultKey: 'database']
-                ]
-            ]]
-        ) {
-            sh '''
-                echo "✅ Vault connecté !"
-                echo "DB_HOST: ${DB_HOST}"
-                echo "DB_USERNAME: ${DB_USERNAME}"
-                echo "DB_NAME: ${DB_NAME}"
-            '''
+        script {
+            echo "🔍 Test Vault connectivity..."
+            
+            // Test 1: Vault health check
+            sh 'curl -v http://192.168.49.2:30200/v1/sys/health || echo "❌ Vault health check failed"'
+            
+            // Test 2: Vault avec credentials
+            try {
+                withVault(
+                    configuration: [
+                        vaultUrl: 'http://192.168.49.2:30200',
+                        vaultCredentialId: 'vault-approle-jenkins',
+                        engineVersion: 2,
+                        timeout: 60
+                    ],
+                    vaultSecrets: [[
+                        path: 'secret/data/taskmanager/database',
+                        engineVersion: 2,
+                        secretValues: [
+                            [envVar: 'DB_HOST', vaultKey: 'host'],
+                            [envVar: 'DB_PORT', vaultKey: 'port'],
+                            [envVar: 'DB_USERNAME', vaultKey: 'username'],
+                            [envVar: 'DB_PASSWORD', vaultKey: 'password'],
+                            [envVar: 'DB_NAME', vaultKey: 'database']
+                        ]
+                    ]]
+                ) {
+                    sh '''
+                        echo "✅ Vault connecté !"
+                        echo "DB_HOST: ${DB_HOST}"
+                        echo "DB_USERNAME: ${DB_USERNAME}"
+                        echo "DB_NAME: ${DB_NAME}"
+                    '''
+                }
+            } catch (Exception e) {
+                echo "❌ Erreur Vault: ${e.getMessage()}"
+                throw e
+            }
         }
     }
 }
