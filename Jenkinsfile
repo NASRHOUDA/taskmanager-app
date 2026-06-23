@@ -96,7 +96,7 @@ pipeline {
                     curl -s -X POST \
                       http://172.23.224.1:8200/v1/auth/approle/login \
                       -H "Content-Type: application/json" \
-                      -d '{"role_id":"3be1a909-3f93-3a0f-af97-40e707bdce3d","secret_id":"a642691e-89f2-bbf6-5e98-a28f33b2e8ad"}'
+                      -d '{"role_id":"b8f677d8-15be-df9e-8de5-117459dbb978","secret_id":"6aa9353b-e195-60eb-d1f5-40072ebb035a"}'
                 ''', returnStdout: true).trim()
                 
                 def vaultToken = sh(script: """
@@ -234,7 +234,7 @@ pipeline {
                 curl -s -X POST \
                   http://172.23.224.1:8200/v1/auth/approle/login \
                   -H "Content-Type: application/json" \
-                  -d '{"role_id":"3be1a909-3f93-3a0f-af97-40e707bdce3d","secret_id":"a642691e-89f2-bbf6-5e98-a28f33b2e8ad"}'
+                  -d '{"role_id":"b8f677d8-15be-df9e-8de5-117459dbb978","secret_id":"a642691e-89f2-bbf6-5e98-a28f33b2e8ad"}'
             ''', returnStdout: true).trim()
             
             def vaultToken = sh(script: """
@@ -368,7 +368,7 @@ stage('Push to Harbor') {
                 curl -s -X POST \
                   http://172.23.224.1:8200/v1/auth/approle/login \
                   -H "Content-Type: application/json" \
-                  -d '{"role_id":"3be1a909-3f93-3a0f-af97-40e707bdce3d","secret_id":"a642691e-89f2-bbf6-5e98-a28f33b2e8ad"}'
+                  -d '{"role_id":"b8f677d8-15be-df9e-8de5-117459dbb978","secret_id":"6aa9353b-e195-60eb-d1f5-40072ebb035a"}'
             ''', returnStdout: true).trim()
             
             def vaultToken = sh(script: """
