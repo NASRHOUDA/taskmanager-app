@@ -55,91 +55,42 @@ pipeline {
         // STAGE 3: Verify Vault Connectivity
         // ============================================
         stage('Verify Vault Connectivity') {
-            steps {
-                script {
-                    echo '🔍 Test Vault connectivity...'
-                    
-                    // Test 1: Health check
-                    sh 'curl -s http://192.168.49.2:30200/v1/sys/health || echo "⚠️ Vault health check failed"'
-                    
-                    // Test 2: Récupération du secret via withVault
-                    try {
-                        withVault(
-                            configuration: [
-                                vaultUrl: env.VAULT_URL,
-                                vaultCredentialId: env.VAULT_CRED_ID,
-                                engineVersion: 2,
-                                timeout: 60
-                            ],
-                            vaultSecrets: [
-                                [
-                                    path: 'secret/data/taskmanager/database',
-                                    engineVersion: 2,
-                                    secretValues: [
-                                        [envVar: 'DB_HOST', vaultKey: 'host'],
-                                        [envVar: 'DB_PORT', vaultKey: 'port'],
-                                        [envVar: 'DB_USERNAME', vaultKey: 'username'],
-                                        [envVar: 'DB_PASSWORD', vaultKey: 'password'],
-                                        [envVar: 'DB_NAME', vaultKey: 'database']
-                                    ]
-                                ]
-                            ]
-                        ) {
-                            sh '''
-                                echo "✅ Vault connecté !"
-                                echo "DB_HOST: ${DB_HOST}"
-                                echo "DB_USERNAME: ${DB_USERNAME}"
-                                echo "DB_NAME: ${DB_NAME}"
-                            '''
-                        }
-                    } catch (Exception e) {
-                        echo "⚠️ withVault a échoué, fallback avec curl..."
-                        
-                        // Fallback: utiliser curl directement
-                        def token = sh(script: '''
-                            curl -s -X POST \
-                              http://192.168.49.2:30200/v1/auth/approle/login \
-                              -H "Content-Type: application/json" \
-                              -d '{"role_id":"1733a07d-54cc-860f-99b3-c748782d9aa4","secret_id":"e4c8b380-afce-9e83-f5aa-9feae99bfb41"}'
-                        ''', returnStdout: true).trim()
-                        
-                        def vaultToken = sh(script: """
-                            echo '$token' | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print(data['auth']['client_token'])
-except:
-    print('ERROR')
-"
-                        """, returnStdout: true).trim()
-                        
-                        if (vaultToken != 'ERROR' && !vaultToken.isEmpty()) {
-                            def secret = sh(script: """
-                                curl -s -H "X-Vault-Token: $vaultToken" \
-                                  http://192.168.49.2:30200/v1/secret/data/taskmanager/database
-                            """, returnStdout: true).trim()
-                            
-                            def dbPassword = sh(script: """
-                                echo '$secret' | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print(data['data']['data']['password'])
-except:
-    print('ERROR')
-"
-                            """, returnStdout: true).trim()
-                            
-                            env.DB_PASSWORD = dbPassword
-                            echo "✅ Secret récupéré via curl: DB_PASSWORD=${env.DB_PASSWORD}"
-                        } else {
-                            error("❌ Vault authentication failed")
-                        }
-                    }
+    steps {
+        script {
+            echo '🔍 Test Vault connectivity...'
+            
+            // Test 1: Health check (CHANGER ICI)
+            sh 'curl -s http://host.docker.internal:8200/v1/sys/health || echo "⚠️ Vault health check failed"'
+            
+            // Test 2: Récupération du secret via withVault (déjà bon avec env.VAULT_URL)
+            try {
+                withVault(
+                    configuration: [
+                        vaultUrl: env.VAULT_URL,  // ← utilise la variable d'environnement
+                        vaultCredentialId: env.VAULT_CRED_ID,
+                        engineVersion: 2,
+                        timeout: 60
+                    ],
+                    // ...
+                ) {
+                    // ...
                 }
+            } catch (Exception e) {
+                echo "⚠️ withVault a échoué, fallback avec curl..."
+                
+                // Fallback: utiliser curl directement (CHANGER ICI AUSSI)
+                def token = sh(script: '''
+                    curl -s -X POST \
+                      http://host.docker.internal:8200/v1/auth/approle/login \
+                      -H "Content-Type: application/json" \
+                      -d '{"role_id":"1733a07d-54cc-860f-99b3-c748782d9aa4","secret_id":"e4c8b380-afce-9e83-f5aa-9feae99bfb41"}'
+                ''', returnStdout: true).trim()
+                
+                // ...
             }
         }
+    }
+}
 
         // ============================================
         // STAGE 4: Install Dependencies
