@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // ===== VAULT =====
-        VAULT_URL = 'http://host.docker.internal:8200'
+        VAULT_URL = 'http://172.23.224.1:8200'
         VAULT_CRED_ID = 'vault-approle-jenkins'
         
         // ===== HARBOR =====
@@ -58,7 +58,7 @@ pipeline {
     steps {
         script {
             echo '🔍 Test Vault connectivity...'
-            sh 'curl -s http://host.docker.internal:8200/v1/sys/health || echo "⚠️ Vault health check failed"'
+            sh 'curl -s http://172.23.224.1:8200/v1/sys/health || echo "⚠️ Vault health check failed"'
             
             try {
                 withVault(
@@ -94,9 +94,9 @@ pipeline {
                 
                 def token = sh(script: '''
                     curl -s -X POST \
-                      http://host.docker.internal:8200/v1/auth/approle/login \
+                      http://172.23.224.1:8200/v1/auth/approle/login \
                       -H "Content-Type: application/json" \
-                      -d '{"role_id":"1733a07d-54cc-860f-99b3-c748782d9aa4","secret_id":"e4c8b380-afce-9e83-f5aa-9feae99bfb41"}'
+                      -d '{"role_id":"3be1a909-3f93-3a0f-af97-40e707bdce3d","secret_id":"a642691e-89f2-bbf6-5e98-a28f33b2e8ad"}'
                 ''', returnStdout: true).trim()
                 
                 def vaultToken = sh(script: """
@@ -106,7 +106,7 @@ pipeline {
                 if (vaultToken != 'ERROR' && !vaultToken.isEmpty()) {
                     def secret = sh(script: """
                         curl -s -H \"X-Vault-Token: $vaultToken\" \
-                          http://host.docker.internal:8200/v1/secret/data/taskmanager/database
+                          http://172.23.224.1:8200/v1/secret/data/taskmanager/database
                     """, returnStdout: true).trim()
                     
                     def dbPassword = sh(script: """
@@ -122,7 +122,6 @@ pipeline {
         }
     }
 }
-
         // ============================================
         // STAGE 4: Install Dependencies
         // ============================================
@@ -233,9 +232,9 @@ pipeline {
         script {
             def token = sh(script: '''
                 curl -s -X POST \
-                  http://host.docker.internal:8200/v1/auth/approle/login \
+                  http://172.23.224.1:8200/v1/auth/approle/login \
                   -H "Content-Type: application/json" \
-                  -d '{"role_id":"1733a07d-54cc-860f-99b3-c748782d9aa4","secret_id":"e4c8b380-afce-9e83-f5aa-9feae99bfb41"}'
+                  -d '{"role_id":"3be1a909-3f93-3a0f-af97-40e707bdce3d","secret_id":"a642691e-89f2-bbf6-5e98-a28f33b2e8ad"}'
             ''', returnStdout: true).trim()
             
             def vaultToken = sh(script: """
@@ -244,47 +243,15 @@ pipeline {
             
             def semgrepToken = sh(script: """
                 curl -s -H \"X-Vault-Token: $vaultToken\" \
-                  http://host.docker.internal:8200/v1/secret/data/taskmanager/semgrep \
+                  http://172.23.224.1:8200/v1/secret/data/taskmanager/semgrep \
                 | jq -r '.data.data.token // ""'
             """, returnStdout: true).trim()
             
             env.SEMGREP_APP_TOKEN = semgrepToken
-                }
-                
-                sh '''
-                    REPORT_PATH="${WORKSPACE}/backend/semgrep-report.json"
-                    
-                    docker run --rm \
-                      -e SEMGREP_APP_TOKEN=${SEMGREP_APP_TOKEN} \
-                      -v ${WORKSPACE_BASE}/backend:/src \
-                      returntocorp/semgrep:latest \
-                      semgrep scan \
-                      --config=auto \
-                      --config=p/nodejs \
-                      --config=p/jwt \
-                      --config=p/owasp-top-ten \
-                      --no-git-ignore \
-                      --exclude=node_modules \
-                      --exclude=coverage \
-                      --json \
-                      --output=/src/semgrep-report.json \
-                      /src \
-                    || echo "⚠️ Semgrep scan terminé avec findings"
-                    
-                    echo "🔍 Vérification du rapport : ${REPORT_PATH}"
-                    ls -la ${WORKSPACE}/backend/ | grep semgrep || echo "⚠️ Aucun fichier semgrep-report.json visible"
-                    
-                    if [ -f "${REPORT_PATH}" ]; then
-                        FINDINGS=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${REPORT_PATH}', 'utf8')).results.length)")
-                    else
-                        echo "❌ Rapport Semgrep introuvable"
-                        FINDINGS="N/A"
-                    fi
-                    
-                    echo "📊 Semgrep findings: ${FINDINGS}"
-                '''
-            }
         }
+        // ... reste du stage
+    }
+}
 
         // ============================================
         // STAGE 8: SonarQube Analysis
@@ -391,14 +358,17 @@ pipeline {
         // ============================================
         // STAGE 12: Push to Harbor
         // ============================================
-        stage('Push to Harbor') {
+        // ============================================
+// STAGE 12: Push to Harbor
+// ============================================
+stage('Push to Harbor') {
     steps {
         script {
             def token = sh(script: '''
                 curl -s -X POST \
-                  http://host.docker.internal:8200/v1/auth/approle/login \
+                  http://172.23.224.1:8200/v1/auth/approle/login \
                   -H "Content-Type: application/json" \
-                  -d '{"role_id":"1733a07d-54cc-860f-99b3-c748782d9aa4","secret_id":"e4c8b380-afce-9e83-f5aa-9feae99bfb41"}'
+                  -d '{"role_id":"3be1a909-3f93-3a0f-af97-40e707bdce3d","secret_id":"a642691e-89f2-bbf6-5e98-a28f33b2e8ad"}'
             ''', returnStdout: true).trim()
             
             def vaultToken = sh(script: """
@@ -407,7 +377,7 @@ pipeline {
             
             def harborSecrets = sh(script: """
                 curl -s -H \"X-Vault-Token: $vaultToken\" \
-                  http://host.docker.internal:8200/v1/secret/data/taskmanager/harbor
+                  http://172.23.224.1:8200/v1/secret/data/taskmanager/harbor
             """, returnStdout: true).trim()
             
             def harborUser = sh(script: """
@@ -423,23 +393,32 @@ pipeline {
         }
         
         sh '''
+            # Configurer Docker pour utiliser Harbor
             mkdir -p ~/.docker
             cat > ~/.docker/config.json << EOF
 {
   "auths": {},
-  "insecure-registries": ["harbor.taskmanager.local"]
+  "insecure-registries": ["harbor.taskmanager.local", "172.23.224.1:8080"]
 }
 EOF
             
-            echo "${HARBOR_PASS}" | docker login harbor.taskmanager.local \
+            # Login avec l'URL interne
+            echo "${HARBOR_PASS}" | docker login 172.23.224.1:8080 \
               -u ${HARBOR_USER} --password-stdin
             
-            docker push ${IMAGE_BACKEND}:${BUILD_NUMBER}
-            docker push ${IMAGE_BACKEND}:latest
-            docker push ${IMAGE_FRONTEND}:${BUILD_NUMBER}
-            docker push ${IMAGE_FRONTEND}:latest
+            # Taguer les images avec l'URL interne
+            docker tag ${IMAGE_BACKEND}:${BUILD_NUMBER} 172.23.224.1:8080/taskmanager/taskmanager-backend:${BUILD_NUMBER}
+            docker tag ${IMAGE_BACKEND}:latest 172.23.224.1:8080/taskmanager/taskmanager-backend:latest
+            docker tag ${IMAGE_FRONTEND}:${BUILD_NUMBER} 172.23.224.1:8080/taskmanager/taskmanager-frontend:${BUILD_NUMBER}
+            docker tag ${IMAGE_FRONTEND}:latest 172.23.224.1:8080/taskmanager/taskmanager-frontend:latest
             
-            docker logout ${HARBOR_REGISTRY}
+            # Pousser les images
+            docker push 172.23.224.1:8080/taskmanager/taskmanager-backend:${BUILD_NUMBER}
+            docker push 172.23.224.1:8080/taskmanager/taskmanager-backend:latest
+            docker push 172.23.224.1:8080/taskmanager/taskmanager-frontend:${BUILD_NUMBER}
+            docker push 172.23.224.1:8080/taskmanager/taskmanager-frontend:latest
+            
+            docker logout 172.23.224.1:8080
             echo "✅ Images poussées vers Harbor"
         '''
     }
