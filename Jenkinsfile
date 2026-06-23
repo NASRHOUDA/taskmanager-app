@@ -466,13 +466,18 @@ print(data['data']['data']['password'])
         }
         
         sh '''
-            # Docker login avec option --insecure-registry (via /etc/docker/daemon.json)
-            # Utiliser l'option de ligne de commande pour contourner le problème
+            # Configuration utilisateur Docker (TOUJOURS pris en compte)
+            mkdir -p ~/.docker
+            cat > ~/.docker/config.json << EOF
+{
+  "auths": {},
+  "insecure-registries": ["harbor.taskmanager.local"]
+}
+EOF
             
             echo "${HARBOR_PASS}" | docker login harbor.taskmanager.local \
               -u ${HARBOR_USER} --password-stdin
             
-            # Pousser les images
             docker push ${IMAGE_BACKEND}:${BUILD_NUMBER}
             docker push ${IMAGE_BACKEND}:latest
             docker push ${IMAGE_FRONTEND}:${BUILD_NUMBER}
