@@ -39,11 +39,13 @@ pipeline {
     steps {
         withVault(
             configuration: [
-                vaultUrl: 'https://192.168.49.2:30200',  // ← CHANGÉ
-                vaultCredentialId: 'vault-approle-jenkins'  // ← GARDER ce nom
+                vaultUrl: 'http://192.168.49.2:30200',  // ← HTTP au lieu de HTTPS
+                vaultCredentialId: 'vault-approle-jenkins',
+                engineVersion: 2,
+                timeout: 60
             ],
             vaultSecrets: [[
-                path: 'secret/data/taskmanager/database',  // ← CHANGÉ avec /data/
+                path: 'secret/data/taskmanager/database',
                 engineVersion: 2,
                 secretValues: [
                     [envVar: 'DB_HOST', vaultKey: 'host'],
