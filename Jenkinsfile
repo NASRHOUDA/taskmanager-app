@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // ===== VAULT =====
-        VAULT_URL = 'http://192.168.49.2:30200'
+        VAULT_URL = 'http://host.docker.internal:8200'
         VAULT_CRED_ID = 'vault-approle-jenkins'
         
         // ===== HARBOR =====
