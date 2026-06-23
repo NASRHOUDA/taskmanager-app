@@ -36,27 +36,33 @@ pipeline {
         }
 
         stage('Verify Vault Connectivity') {
-            steps {
-                withVault(
-                    configuration: [
-                        vaultUrl: 'http://host.docker.internal:8200',
-                        vaultCredentialId: 'vault-approle-jenkins'
-                    ],
-                    vaultSecrets: [[
-                        path: 'secret/taskmanager/ci',
-                        engineVersion: 2,
-                        secretValues: [
-                            [envVar: 'VAULT_HARBOR_USER', vaultKey: 'harbor_user']
-                        ]
-                    ]]
-                ) {
-                    sh '''
-                        echo "✅ Vault joignable — secret/taskmanager/ci accessible"
-                        echo "✅ Harbor user récupéré depuis Vault : ${VAULT_HARBOR_USER}"
-                    '''
-                }
-            }
+    steps {
+        withVault(
+            configuration: [
+                vaultUrl: 'https://192.168.49.2:30200',  // ← CHANGÉ
+                vaultCredentialId: 'vault-approle-jenkins'  // ← GARDER ce nom
+            ],
+            vaultSecrets: [[
+                path: 'secret/data/taskmanager/database',  // ← CHANGÉ avec /data/
+                engineVersion: 2,
+                secretValues: [
+                    [envVar: 'DB_HOST', vaultKey: 'host'],
+                    [envVar: 'DB_PORT', vaultKey: 'port'],
+                    [envVar: 'DB_USERNAME', vaultKey: 'username'],
+                    [envVar: 'DB_PASSWORD', vaultKey: 'password'],
+                    [envVar: 'DB_NAME', vaultKey: 'database']
+                ]
+            ]]
+        ) {
+            sh '''
+                echo "✅ Vault connecté !"
+                echo "DB_HOST: ${DB_HOST}"
+                echo "DB_USERNAME: ${DB_USERNAME}"
+                echo "DB_NAME: ${DB_NAME}"
+            '''
         }
+    }
+}
 
         // FIX #1 : lock files régénérés -> npm ci strict, plus de fallback silencieux.
         // Si npm ci échoue à nouveau ici, c'est un vrai signal qu'il faut régénérer
