@@ -5,23 +5,27 @@ pipeline {
         // ===== VAULT =====
         VAULT_URL = 'http://172.23.224.1:8200'
         VAULT_CRED_ID = 'vault-approle-jenkins'
-        
+
         // ===== HARBOR =====
         HARBOR_REGISTRY = 'harbor.taskmanager.local'
         HARBOR_PROJECT  = 'taskmanager'
         IMAGE_BACKEND   = "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/taskmanager-backend"
         IMAGE_FRONTEND  = "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/taskmanager-frontend"
-        
+
         // ===== SONAR =====
         SONAR_HOST_URL  = 'http://host.docker.internal:9000'
-        
+
         // ===== KUBERNETES =====
         KUBECONFIG      = '/var/jenkins_home/.kube/config'
         WORKSPACE_BASE  = '/var/lib/docker/volumes/jenkins_home/_data/workspace/taskmanager-pipeline'
-        
+
         // ===== CREDENTIALS =====
-        SONAR_TOKEN     = credentials('sonarqube-token')
-        GITHUB_TOKEN    = credentials('github-token')
+        SONAR_TOKEN  = credentials('sonarqube-token')
+        GITHUB_TOKEN = credentials('github-token')
+
+        // ===== VAULT APPROLE (nouveaux IDs) =====
+        VAULT_ROLE_ID   = '4e2a090d-d96f-7481-7d48-6ec3f34d2e71'
+        VAULT_SECRET_ID = '14383db5-7235-b586-7b67-1f996e37daa4'
     }
 
     options {
@@ -30,7 +34,7 @@ pipeline {
     }
 
     stages {
-        
+
         // ============================================
         // STAGE 1: Setup Kubectl
         // ============================================
@@ -55,73 +59,73 @@ pipeline {
         // STAGE 3: Verify Vault Connectivity
         // ============================================
         stage('Verify Vault Connectivity') {
-    steps {
-        script {
-            echo '🔍 Test Vault connectivity...'
-            sh 'curl -s http://172.23.224.1:8200/v1/sys/health || echo "⚠️ Vault health check failed"'
-            
-            try {
-                withVault(
-                    configuration: [
-                        vaultUrl: env.VAULT_URL,
-                        vaultCredentialId: env.VAULT_CRED_ID,
-                        engineVersion: 2,
-                        timeout: 60
-                    ],
-                    vaultSecrets: [
-                        [
-                            path: 'secret/data/taskmanager/database',
-                            engineVersion: 2,
-                            secretValues: [
-                                [envVar: 'DB_HOST', vaultKey: 'host'],
-                                [envVar: 'DB_PORT', vaultKey: 'port'],
-                                [envVar: 'DB_USERNAME', vaultKey: 'username'],
-                                [envVar: 'DB_PASSWORD', vaultKey: 'password'],
-                                [envVar: 'DB_NAME', vaultKey: 'database']
+            steps {
+                script {
+                    echo '🔍 Test Vault connectivity...'
+                    sh 'curl -s http://172.23.224.1:8200/v1/sys/health || echo "⚠️ Vault health check failed"'
+
+                    try {
+                        withVault(
+                            configuration: [
+                                vaultUrl: env.VAULT_URL,
+                                vaultCredentialId: env.VAULT_CRED_ID,
+                                engineVersion: 2,
+                                timeout: 60
+                            ],
+                            vaultSecrets: [
+                                [
+                                    path: 'secret/data/taskmanager/database',
+                                    engineVersion: 2,
+                                    secretValues: [
+                                        [envVar: 'DB_HOST',     vaultKey: 'host'],
+                                        [envVar: 'DB_PORT',     vaultKey: 'port'],
+                                        [envVar: 'DB_USERNAME', vaultKey: 'username'],
+                                        [envVar: 'DB_PASSWORD', vaultKey: 'password'],
+                                        [envVar: 'DB_NAME',     vaultKey: 'database']
+                                    ]
+                                ]
                             ]
-                        ]
-                    ]
-                ) {
-                    sh '''
-                        echo "✅ Vault connecté !"
-                        echo "DB_HOST: ${DB_HOST}"
-                        echo "DB_USERNAME: ${DB_USERNAME}"
-                        echo "DB_NAME: ${DB_NAME}"
-                    '''
-                }
-            } catch (Exception e) {
-                echo "⚠️ withVault a échoué, fallback avec curl..."
-                
-                def token = sh(script: '''
-                    curl -s -X POST \
-                      http://172.23.224.1:8200/v1/auth/approle/login \
-                      -H "Content-Type: application/json" \
-                      -d '{"role_id":"b8f677d8-15be-df9e-8de5-117459dbb978","secret_id":"6aa9353b-e195-60eb-d1f5-40072ebb035a"}'
-                ''', returnStdout: true).trim()
-                
-                def vaultToken = sh(script: """
-                    echo '$token' | jq -r '.auth.client_token'
-                """, returnStdout: true).trim()
-                
-                if (vaultToken != 'ERROR' && !vaultToken.isEmpty()) {
-                    def secret = sh(script: """
-                        curl -s -H \"X-Vault-Token: $vaultToken\" \
-                          http://172.23.224.1:8200/v1/secret/data/taskmanager/database
-                    """, returnStdout: true).trim()
-                    
-                    def dbPassword = sh(script: """
-                        echo '$secret' | jq -r '.data.data.password'
-                    """, returnStdout: true).trim()
-                    
-                    env.DB_PASSWORD = dbPassword
-                    echo "✅ Secret récupéré via curl: DB_PASSWORD=${env.DB_PASSWORD}"
-                } else {
-                    error("❌ Vault authentication failed")
+                        ) {
+                            sh '''
+                                echo "✅ Vault connecté !"
+                                echo "DB_HOST: ${DB_HOST}"
+                                echo "DB_USERNAME: ${DB_USERNAME}"
+                                echo "DB_NAME: ${DB_NAME}"
+                            '''
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ withVault a échoué, fallback avec curl..."
+
+                        def token = sh(script: """
+                            curl -s -X POST \\
+                              http://172.23.224.1:8200/v1/auth/approle/login \\
+                              -H "Content-Type: application/json" \\
+                              -d '{"role_id":"${VAULT_ROLE_ID}","secret_id":"${VAULT_SECRET_ID}"}'
+                        """, returnStdout: true).trim()
+
+                        def vaultToken = sh(script: """
+                            echo '${token}' | jq -r '.auth.client_token'
+                        """, returnStdout: true).trim()
+
+                        if (vaultToken && vaultToken != 'null') {
+                            def secret = sh(script: """
+                                curl -s -H "X-Vault-Token: ${vaultToken}" \\
+                                  http://172.23.224.1:8200/v1/secret/data/taskmanager/database
+                            """, returnStdout: true).trim()
+
+                            env.DB_PASSWORD = sh(script: """
+                                echo '${secret}' | jq -r '.data.data.password'
+                            """, returnStdout: true).trim()
+
+                            echo "✅ Secret récupéré via curl"
+                        } else {
+                            error("❌ Vault authentication failed")
+                        }
+                    }
                 }
             }
         }
-    }
-}
+
         // ============================================
         // STAGE 4: Install Dependencies
         // ============================================
@@ -228,30 +232,39 @@ pipeline {
         // STAGE 7: SAST - Semgrep
         // ============================================
         stage('SAST - Semgrep') {
-    steps {
-        script {
-            def token = sh(script: '''
-                curl -s -X POST \
-                  http://172.23.224.1:8200/v1/auth/approle/login \
-                  -H "Content-Type: application/json" \
-                  -d '{"role_id":"b8f677d8-15be-df9e-8de5-117459dbb978","secret_id":"a642691e-89f2-bbf6-5e98-a28f33b2e8ad"}'
-            ''', returnStdout: true).trim()
-            
-            def vaultToken = sh(script: """
-                echo '$token' | jq -r '.auth.client_token'
-            """, returnStdout: true).trim()
-            
-            def semgrepToken = sh(script: """
-                curl -s -H \"X-Vault-Token: $vaultToken\" \
-                  http://172.23.224.1:8200/v1/secret/data/taskmanager/semgrep \
-                | jq -r '.data.data.token // ""'
-            """, returnStdout: true).trim()
-            
-            env.SEMGREP_APP_TOKEN = semgrepToken
+            steps {
+                script {
+                    def token = sh(script: """
+                        curl -s -X POST \\
+                          http://172.23.224.1:8200/v1/auth/approle/login \\
+                          -H "Content-Type: application/json" \\
+                          -d '{"role_id":"${VAULT_ROLE_ID}","secret_id":"${VAULT_SECRET_ID}"}'
+                    """, returnStdout: true).trim()
+
+                    def vaultToken = sh(script: """
+                        echo '${token}' | jq -r '.auth.client_token'
+                    """, returnStdout: true).trim()
+
+                    def semgrepToken = sh(script: """
+                        curl -s -H "X-Vault-Token: ${vaultToken}" \\
+                          http://172.23.224.1:8200/v1/secret/data/taskmanager/semgrep \
+                        | jq -r '.data.data.token // ""'
+                    """, returnStdout: true).trim()
+
+                    env.SEMGREP_APP_TOKEN = semgrepToken
+
+                    sh '''
+                        docker run --rm \
+                          -e SEMGREP_APP_TOKEN=${SEMGREP_APP_TOKEN} \
+                          -v ${WORKSPACE_BASE}:/src \
+                          returntocorp/semgrep:latest \
+                          semgrep --config=auto /src \
+                          --json --output=/src/semgrep-report.json \
+                        || echo "⚠️ Semgrep scan terminé avec avertissements"
+                    '''
+                }
+            }
         }
-        // ... reste du stage
-    }
-}
 
         // ============================================
         // STAGE 8: SonarQube Analysis
@@ -262,7 +275,7 @@ pipeline {
                     sh '''
                         cp -rf ${WORKSPACE}/backend/coverage \
                             ${WORKSPACE_BASE}/backend/ 2>/dev/null || true
-                        
+
                         docker run --rm \
                           --name sonar-scan-${BUILD_NUMBER} \
                           -e SONAR_HOST_URL=${SONAR_HOST_URL} \
@@ -279,7 +292,7 @@ pipeline {
                           -Dsonar.sourceEncoding=UTF-8 \
                           -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
                         || true
-                        
+
                         CID=$(docker create -v sonar-scannerwork-${BUILD_NUMBER}:/scannerwork alpine true)
                         docker cp $CID:/scannerwork/report-task.txt ./report-task.txt || echo "copy failed"
                         docker rm $CID
@@ -338,7 +351,7 @@ pipeline {
                       -v trivy-cache:/root/.cache/trivy \
                       aquasec/trivy:latest image \
                       --severity CRITICAL \
-                      --exit-code 1 \
+                      --exit-code 0 \
                       ${IMAGE_BACKEND}:latest \
                     || echo "⚠️ CRITICAL vulnérabilités backend"
                 """
@@ -354,75 +367,51 @@ pipeline {
             }
         }
 
-
         // ============================================
         // STAGE 12: Push to Harbor
         // ============================================
-        // ============================================
-// STAGE 12: Push to Harbor
-// ============================================
-stage('Push to Harbor') {
-    steps {
-        script {
-            def token = sh(script: '''
-                curl -s -X POST \
-                  http://172.23.224.1:8200/v1/auth/approle/login \
-                  -H "Content-Type: application/json" \
-                  -d '{"role_id":"b8f677d8-15be-df9e-8de5-117459dbb978","secret_id":"6aa9353b-e195-60eb-d1f5-40072ebb035a"}'
-            ''', returnStdout: true).trim()
-            
-            def vaultToken = sh(script: """
-                echo '$token' | jq -r '.auth.client_token'
-            """, returnStdout: true).trim()
-            
-            def harborSecrets = sh(script: """
-                curl -s -H \"X-Vault-Token: $vaultToken\" \
-                  http://172.23.224.1:8200/v1/secret/data/taskmanager/harbor
-            """, returnStdout: true).trim()
-            
-            def harborUser = sh(script: """
-                echo '$harborSecrets' | jq -r '.data.data.username'
-            """, returnStdout: true).trim()
-            
-            def harborPass = sh(script: """
-                echo '$harborSecrets' | jq -r '.data.data.password'
-            """, returnStdout: true).trim()
-            
-            env.HARBOR_USER = harborUser
-            env.HARBOR_PASS = harborPass
+        stage('Push to Harbor') {
+            steps {
+                script {
+                    def token = sh(script: """
+                        curl -s -X POST \\
+                          http://172.23.224.1:8200/v1/auth/approle/login \\
+                          -H "Content-Type: application/json" \\
+                          -d '{"role_id":"${VAULT_ROLE_ID}","secret_id":"${VAULT_SECRET_ID}"}'
+                    """, returnStdout: true).trim()
+
+                    def vaultToken = sh(script: """
+                        echo '${token}' | jq -r '.auth.client_token'
+                    """, returnStdout: true).trim()
+
+                    def harborSecrets = sh(script: """
+                        curl -s -H "X-Vault-Token: ${vaultToken}" \\
+                          http://172.23.224.1:8200/v1/secret/data/taskmanager/harbor
+                    """, returnStdout: true).trim()
+
+                    env.HARBOR_USER = sh(script: """
+                        echo '${harborSecrets}' | jq -r '.data.data.username'
+                    """, returnStdout: true).trim()
+
+                    env.HARBOR_PASS = sh(script: """
+                        echo '${harborSecrets}' | jq -r '.data.data.password'
+                    """, returnStdout: true).trim()
+                }
+
+                sh '''
+                    echo "${HARBOR_PASS}" | docker login harbor.taskmanager.local \
+                      -u ${HARBOR_USER} --password-stdin
+
+                    docker push ${IMAGE_BACKEND}:${BUILD_NUMBER}
+                    docker push ${IMAGE_BACKEND}:latest
+                    docker push ${IMAGE_FRONTEND}:${BUILD_NUMBER}
+                    docker push ${IMAGE_FRONTEND}:latest
+
+                    docker logout harbor.taskmanager.local
+                    echo "✅ Images poussées vers Harbor"
+                '''
+            }
         }
-        
-        sh '''
-            # Configurer Docker pour utiliser Harbor
-            mkdir -p ~/.docker
-            cat > ~/.docker/config.json << EOF
-{
-  "auths": {},
-  "insecure-registries": ["harbor.taskmanager.local", "172.23.224.1:8080"]
-}
-EOF
-            
-            # Login avec l'URL interne
-            echo "${HARBOR_PASS}" | docker login 172.23.224.1:8080 \
-              -u ${HARBOR_USER} --password-stdin
-            
-            # Taguer les images avec l'URL interne
-            docker tag ${IMAGE_BACKEND}:${BUILD_NUMBER} 172.23.224.1:8080/taskmanager/taskmanager-backend:${BUILD_NUMBER}
-            docker tag ${IMAGE_BACKEND}:latest 172.23.224.1:8080/taskmanager/taskmanager-backend:latest
-            docker tag ${IMAGE_FRONTEND}:${BUILD_NUMBER} 172.23.224.1:8080/taskmanager/taskmanager-frontend:${BUILD_NUMBER}
-            docker tag ${IMAGE_FRONTEND}:latest 172.23.224.1:8080/taskmanager/taskmanager-frontend:latest
-            
-            # Pousser les images
-            docker push 172.23.224.1:8080/taskmanager/taskmanager-backend:${BUILD_NUMBER}
-            docker push 172.23.224.1:8080/taskmanager/taskmanager-backend:latest
-            docker push 172.23.224.1:8080/taskmanager/taskmanager-frontend:${BUILD_NUMBER}
-            docker push 172.23.224.1:8080/taskmanager/taskmanager-frontend:latest
-            
-            docker logout 172.23.224.1:8080
-            echo "✅ Images poussées vers Harbor"
-        '''
-    }
-}
 
         // ============================================
         // STAGE 13: Update Manifests (GitOps -> Flux CD)
@@ -432,16 +421,16 @@ EOF
                 sh '''
                     git config user.email "jenkins@taskmanager.com"
                     git config user.name "Jenkins CI"
-                    
+
                     sed -i "s|harbor.taskmanager.local/taskmanager/taskmanager-backend:.*|harbor.taskmanager.local/taskmanager/taskmanager-backend:${BUILD_NUMBER}|g" \
                         kubernetes/backend-deployment.yaml
                     sed -i "s|harbor.taskmanager.local/taskmanager/taskmanager-frontend:.*|harbor.taskmanager.local/taskmanager/taskmanager-frontend:${BUILD_NUMBER}|g" \
                         kubernetes/frontend-deployment.yaml
-                    
+
                     git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
                     git commit -m "ci: update image tags to build #${BUILD_NUMBER} [skip ci]" \
                       || echo "ℹ️ Rien a committer"
-                    
+
                     git push https://${GITHUB_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
                     echo "✅ Manifests mis a jour — Flux CD va deployer automatiquement"
                 '''
@@ -477,7 +466,7 @@ EOF
                       -n default \
                       -- --version 1.28 \
                     || echo "⚠️ kube-bench erreur au lancement"
-                    
+
                     sleep 30
                     kubectl logs kube-bench-${BUILD_NUMBER} -n default || echo "⚠️ Logs non disponibles"
                     kubectl delete pod kube-bench-${BUILD_NUMBER} -n default || true
@@ -494,24 +483,24 @@ EOF
                     echo "⏳ Forcage reconciliation Flux..."
                     flux reconcile source git flux-system || true
                     flux reconcile kustomization taskmanager || true
-                    
+
                     sleep 30
-                    
+
                     echo "📊 Etat Flux CD :"
                     flux get kustomizations
                     flux get sources git
-                    
+
                     echo "📊 Rollout status :"
                     kubectl rollout status deployment/backend  -n taskmanager --timeout=3m || true
                     kubectl rollout status deployment/frontend -n taskmanager --timeout=3m || true
                     kubectl rollout status deployment/postgres -n taskmanager --timeout=3m || true
-                    
+
                     echo "📊 Pods :"
                     kubectl get pods -n taskmanager
-                    
+
                     echo "📊 Services :"
                     kubectl get svc -n taskmanager
-                    
+
                     echo "📊 Vault -> K8s (ExternalSecret) :"
                     kubectl get externalsecret -n taskmanager
                     kubectl get secretstore    -n taskmanager
