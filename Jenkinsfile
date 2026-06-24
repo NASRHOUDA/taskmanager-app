@@ -221,17 +221,24 @@ pipeline {
         // STAGE 9: Build Docker Images
         // ============================================
         stage('Build Docker Images') {
-            steps {
-                dir('backend') {
-                    sh "docker build -t ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER} -t ${DOCKER_IMAGE_BACKEND}:latest ."
-                }
-                dir('frontend') {
-                    sh "docker build -t ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} -t ${DOCKER_IMAGE_FRONTEND}:latest ."
-                }
-                echo '✅ Images buildées'
-            }
-        }
+    steps {
+        sh """
+            docker build \
+              -t ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER} \
+              -t ${DOCKER_IMAGE_BACKEND}:latest \
+              -f backend/Dockerfile \
+              backend/
 
+            docker build \
+              -t ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} \
+              -t ${DOCKER_IMAGE_FRONTEND}:latest \
+              -f frontend/Dockerfile \
+              frontend/
+
+            echo "✅ Images buildées"
+        """
+    }
+}
         // ============================================
         // STAGE 10: Trivy Image Scan
         // ============================================
