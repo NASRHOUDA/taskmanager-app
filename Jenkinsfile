@@ -25,7 +25,7 @@ pipeline {
 
         // ===== VAULT APPROLE (nouveaux IDs) =====
         VAULT_ROLE_ID   = '4e2a090d-d96f-7481-7d48-6ec3f34d2e71'
-        VAULT_SECRET_ID = '8a6ade62-f3d8-43b2-4650-31a54024bde6''
+        VAULT_SECRET_ID = '8a6ade62-f3d8-43b2-4650-31a54024bde6'
     }
 
     options {
