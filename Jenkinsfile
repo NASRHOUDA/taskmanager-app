@@ -1,5 +1,3 @@
-cd ~/taskmanager-app
-cat > Jenkinsfile << 'EOF'
 pipeline {
     agent any
 
@@ -301,4 +299,4 @@ pipeline {
         }
     }
 }
-EOF
+
