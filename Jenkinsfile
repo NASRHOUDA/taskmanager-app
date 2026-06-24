@@ -12,7 +12,7 @@ pipeline {
         VAULT_TOKEN = 'root'
 
         // ===== SONAR =====
-        SONAR_HOST_URL = 'http://localhost:9000'
+        SONAR_HOST_URL = '-Dsonar.host.url=http://sonarqube:9000'
         SONAR_TOKEN = credentials('sonar-token')
     }
 
