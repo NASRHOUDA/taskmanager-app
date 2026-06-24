@@ -1,0 +1,5 @@
+sonar.projectKey=taskmanager-app
+sonar.projectName=taskmanager-app
+sonar.sources=backend/src,frontend/src
+sonar.exclusions=**/node_modules/**,**/dist/**,**/build/**
+sonar.javascript.lcov.reportPaths=backend/coverage/lcov.info,frontend/coverage/lcov.info
