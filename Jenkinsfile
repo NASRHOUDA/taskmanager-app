@@ -178,22 +178,22 @@ pipeline {
         // STAGE 7: SonarQube Analysis
         // ============================================
         stage('SonarQube Analysis') {
-            steps {
-                dir('backend') {
-                    withSonarQubeEnv('SonarQube') {
-                        sh '''
-                            npx sonar-scanner \
-                              -Dsonar.projectKey=taskmanager-backend \
-                              -Dsonar.sources=. \
-                              -Dsonar.host.url=http://host.docker.internal:9000 \
-                              -Dsonar.login=${SONAR_TOKEN} \
-                              -Dsonar.exclusions=node_modules/**,**/*.test.js \
-                            || echo "⚠️ SonarQube scan terminé"
-                        '''
-                    }
-                }
+    steps {
+        dir('backend') {
+            withSonarQubeEnv('SonarQube') {
+                sh '''
+                    npx sonar-scanner \
+                      -Dsonar.projectKey=taskmanager-backend \
+                      -Dsonar.sources=. \
+                      -Dsonar.host.url=http://host.docker.internal:9000 \
+                      -Dsonar.login=${SONAR_TOKEN} \
+                      -Dsonar.exclusions=node_modules/**,**/*.test.js \
+                    || echo "⚠️ SonarQube scan terminé"
+                '''
             }
         }
+    }
+}
 
         // ============================================
         // STAGE 8: OWASP Dependency Check
