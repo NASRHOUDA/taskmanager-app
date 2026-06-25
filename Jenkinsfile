@@ -177,21 +177,20 @@ pipeline {
         // ============================================
         // STAGE 7: SonarQube Analysis
         // ============================================
-        stage('Update Manifests') {
+        stage('SonarQube Analysis') {
     steps {
-        sh """
-            git config user.email jenkins@taskmanager.com
-            git config user.name "Jenkins CI"
-            sed -i "s|image: houdanasr/taskmanager-backend:.*|image: houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
-            sed -i "s|image: houdanasr/taskmanager-frontend:.*|image: houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
-            git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
-            git commit -m "ci: update image tags to build #${BUILD_NUMBER}" || echo "Nothing to commit"
-        """
-        
-        withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
-            sh '''
-                git push https://${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main || echo "⚠️ Git push terminé"
-            '''
+        dir('backend') {
+            withSonarQubeEnv('SonarQube') {
+                sh '''
+                    npx sonar-scanner \
+                      -Dsonar.projectKey=taskmanager-backend \
+                      -Dsonar.sources=. \
+                      -Dsonar.host.url=http://host.docker.internal:9000 \
+                      -Dsonar.login=${SONAR_TOKEN} \
+                      -Dsonar.exclusions=node_modules/**,**/*.test.js \
+                    || echo "⚠️ SonarQube scan terminé"
+                '''
+            }
         }
     }
 }
@@ -283,14 +282,14 @@ pipeline {
         // ============================================
         stage('Update Manifests') {
     steps {
-        sh '''
+        sh """
             git config user.email jenkins@taskmanager.com
             git config user.name "Jenkins CI"
-            sed -i s|image: houdanasr/taskmanager-backend:.*|image: houdanasr/taskmanager-backend:${BUILD_NUMBER}|g kubernetes/backend-deployment.yaml
-            sed -i s|image: houdanasr/taskmanager-frontend:.*|image: houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g kubernetes/frontend-deployment.yaml
+            sed -i "s|image: houdanasr/taskmanager-backend:.*|image: houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
+            sed -i "s|image: houdanasr/taskmanager-frontend:.*|image: houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
             git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
             git commit -m "ci: update image tags to build #${BUILD_NUMBER}" || echo "Nothing to commit"
-        '''
+        """
         
         withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
             sh '''
