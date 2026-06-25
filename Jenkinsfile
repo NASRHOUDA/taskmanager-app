@@ -292,10 +292,11 @@ pipeline {
         """
         
         withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
-            sh '''
-                git push https://${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main || echo "⚠️ Git push terminé"
-            '''
-        }
+    sh '''
+        git remote set-url origin https://${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git
+        git push origin HEAD:main || echo "⚠️ Git push terminé"
+    '''
+}
     }
 }
 
