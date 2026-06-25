@@ -185,7 +185,7 @@ pipeline {
                             npx sonar-scanner \
                               -Dsonar.projectKey=taskmanager-backend \
                               -Dsonar.sources=. \
-                              -Dsonar.host.url=http://sonarqube:9000 \
+                              -Dsonar.host.url=http://host.docker.internal:9000 \
                               -Dsonar.login=${SONAR_TOKEN} \
                               -Dsonar.exclusions=node_modules/**,**/*.test.js \
                             || echo "⚠️ SonarQube scan terminé"
