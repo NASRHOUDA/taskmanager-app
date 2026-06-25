@@ -289,13 +289,8 @@ pipeline {
             sed -i "s|image: houdanasr/taskmanager-frontend:.*|image: houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
             git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
             git commit -m "ci: update image tags to build #${BUILD_NUMBER}" || echo "Nothing to commit"
+            git push https://${env.GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main || echo "⚠️ Git push terminé"
         """
-        
-        withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
-            sh '''
-                git push https://${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main || echo "⚠️ Git push terminé"
-            '''
-        }
     }
 }
 
