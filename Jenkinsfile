@@ -227,14 +227,12 @@ pipeline {
               -t ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER} \
               -t ${DOCKER_IMAGE_BACKEND}:latest \
               -f backend/Dockerfile \
-              backend/
-
+              .
             docker build \
               -t ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} \
               -t ${DOCKER_IMAGE_FRONTEND}:latest \
               -f frontend/Dockerfile \
-              frontend/
-
+              .
             echo "✅ Images buildées"
         """
     }
