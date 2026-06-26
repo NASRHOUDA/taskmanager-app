@@ -102,9 +102,9 @@ pipeline {
         stage('SAST - Semgrep') {
             steps {
                 dir('backend') {
-                    sh """
+                    sh '''
                         docker run --rm \
-                          -v $(pwd):/src \
+                          -v ${pwd()}:/src \
                           returntocorp/semgrep:latest \
                           semgrep --config=p/security-audit /src --no-git-ignore \
                           --json --output=/src/semgrep-report.json \
@@ -143,7 +143,7 @@ pipeline {
                 dir('backend') {
                     sh """
                         docker run --rm \
-                          -v $(pwd):/src \
+                          -v ${pwd()}:/src \
                           owasp/dependency-check:latest \
                           --project "taskmanager-backend" \
                           --scan /src \
@@ -276,7 +276,7 @@ pipeline {
             steps {
                 sh """
                     docker run --rm \
-                      -v $(pwd)/kubernetes:/work \
+                      -v ${pwd()}/kubernetes:/work \
                       bridgecrew/checkov:latest \
                       -d /work \
                       --framework kubernetes \
