@@ -257,8 +257,8 @@ pipeline {
             steps {
                 sh """
                     sleep 30
-                    flux reconcile source git flux-system || true
-                    flux reconcile kustomization taskmanager || true
+                    flux reconcile source git flux-system --timeout=3m || true
+                    flux reconcile kustomization taskmanager --timeout=3m || true
 
                     sleep 20
                     echo "📊 Flux status:"
