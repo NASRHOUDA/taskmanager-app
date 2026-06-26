@@ -201,7 +201,7 @@ pipeline {
                     def dockerSecrets = sh(script: '''
                         curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
                           ${VAULT_URL}/v1/secret/data/taskmanager/docker
-                    """, returnStdout: true).trim()
+                    ''', returnStdout: true).trim()
 
                     def DOCKER_USER = sh(script: """
                         echo '${dockerSecrets}' | jq -r '.data.data.username'
