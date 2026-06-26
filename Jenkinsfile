@@ -105,14 +105,14 @@ pipeline {
         stage('SAST - Semgrep') {
             steps {
                 dir('backend') {
-                    sh '''
+                    sh """
                         docker run --rm \
                           -v $(pwd):/src \
                           returntocorp/semgrep:latest \
                           semgrep --config=p/security-audit /src \
                           --json --output=/src/semgrep-report.json \
                         || echo "⚠️ Semgrep scan terminé"
-                    '''
+                    """
                 }
             }
         }
@@ -124,7 +124,7 @@ pipeline {
             steps {
                 dir('backend') {
                     withSonarQubeEnv('SonarQube') {
-                        sh '''
+                        sh """
                             npx sonar-scanner \
                               -Dsonar.projectKey=taskmanager-backend \
                               -Dsonar.sources=. \
@@ -132,7 +132,7 @@ pipeline {
                               -Dsonar.login=${SONAR_TOKEN} \
                               -Dsonar.exclusions=node_modules/**,**/*.test.js \
                             || echo "⚠️ SonarQube scan terminé"
-                        '''
+                        """
                     }
                 }
             }
@@ -144,7 +144,7 @@ pipeline {
         stage('OWASP Dependency Check') {
             steps {
                 dir('backend') {
-                    sh '''
+                    sh """
                         docker run --rm \
                           -v $(pwd):/src \
                           owasp/dependency-check:latest \
@@ -154,7 +154,7 @@ pipeline {
                           --out /src/owasp-report.json \
                           --noupdate \
                         || echo "⚠️ OWASP scan terminé"
-                    '''
+                    """
                 }
             }
         }
@@ -164,11 +164,11 @@ pipeline {
         // ============================================
         stage('Build Docker Images') {
             steps {
-                sh '''
+                sh """
                     docker build -t ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER} -t ${DOCKER_IMAGE_BACKEND}:latest ./backend
                     docker build -t ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} -t ${DOCKER_IMAGE_FRONTEND}:latest ./frontend
                     echo "✅ Images buildées"
-                '''
+                """
             }
         }
 
@@ -177,7 +177,7 @@ pipeline {
         // ============================================
         stage('Trivy Image Scan') {
             steps {
-                sh '''
+                sh """
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
                       aquasec/trivy:latest image \
@@ -191,7 +191,7 @@ pipeline {
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
                       ${DOCKER_IMAGE_FRONTEND}:latest
-                '''
+                """
             }
         }
 
@@ -204,7 +204,7 @@ pipeline {
                     def dockerSecrets = sh(script: '''
                         curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
                           ${VAULT_URL}/v1/secret/data/taskmanager/docker
-                    ''', returnStdout: true).trim()
+                    """, returnStdout: true).trim()
 
                     def DOCKER_USER = sh(script: """
                         echo '${dockerSecrets}' | jq -r '.data.data.username'
@@ -214,7 +214,7 @@ pipeline {
                         echo '${dockerSecrets}' | jq -r '.data.data.password'
                     """, returnStdout: true).trim()
 
-                    sh '''
+                    sh """
                         echo '${DOCKER_PASS}' | docker login -u '${DOCKER_USER}' --password-stdin
                         docker push ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}
                         docker push ${DOCKER_IMAGE_BACKEND}:latest
@@ -222,7 +222,7 @@ pipeline {
                         docker push ${DOCKER_IMAGE_FRONTEND}:latest
                         docker logout
                         echo "✅ Images poussées vers Docker Hub"
-                    '''
+                    """
                 }
             }
         }
@@ -232,7 +232,7 @@ pipeline {
         // ============================================
         stage('Update Manifests') {
             steps {
-                sh '''
+                sh """
                     git config user.email "jenkins@taskmanager.com"
                     git config user.name "Jenkins CI"
 
@@ -246,7 +246,7 @@ pipeline {
 
                     git push https://${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
                     echo "✅ Manifests mis à jour"
-                '''
+                """
             }
         }
 
@@ -255,7 +255,7 @@ pipeline {
         // ============================================
         stage('Flux Reconciliation') {
             steps {
-                sh '''
+                sh """
                     sleep 30
                     flux reconcile source git flux-system || true
                     flux reconcile kustomization taskmanager || true
@@ -268,7 +268,7 @@ pipeline {
                     kubectl get pods -n taskmanager || true
                     
                     echo "✅ Déploiement Flux CD complété"
-                '''
+                """
             }
         }
 
@@ -277,7 +277,7 @@ pipeline {
         // ============================================
         stage('Checkov - IaC Scan') {
             steps {
-                sh '''
+                sh """
                     docker run --rm \
                       -v $(pwd)/kubernetes:/work \
                       bridgecrew/checkov:latest \
@@ -285,7 +285,7 @@ pipeline {
                       --framework kubernetes \
                       --soft-fail \
                     || echo "✅ Checkov scan terminé"
-                '''
+                """
             }
         }
     }
