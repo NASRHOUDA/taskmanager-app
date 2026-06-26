@@ -109,7 +109,7 @@ pipeline {
                         docker run --rm \
                           -v $(pwd):/src \
                           returntocorp/semgrep:latest \
-                          semgrep --config=p/security-audit /src \
+                          semgrep --config=p/security-audit /src --no-git-ignore \
                           --json --output=/src/semgrep-report.json \
                         || echo "⚠️ Semgrep scan terminé"
                     """
