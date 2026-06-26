@@ -8,12 +8,9 @@ pipeline {
         DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
 
         // ===== VAULT =====
-        VAULT_URL = 'http://localhost:8200'
+        VAULT_URL = 'http://host.docker.internal:8200'
         VAULT_TOKEN = 'root'
 
-        // ===== SONAR =====
-        SONAR_HOST_URL = 'http://localhost:9000'
-        SONAR_TOKEN = credentials('sonar-token')
     }
 
     options {
@@ -129,7 +126,7 @@ pipeline {
                               -Dsonar.projectKey=taskmanager-backend \
                               -Dsonar.sources=. \
                               -Dsonar.host.url=${SONAR_HOST_URL} \
-                              -Dsonar.login=${SONAR_TOKEN} \
+                              -Dsonar.token=${SONAR_TOKEN} \
                               -Dsonar.exclusions=node_modules/**,**/*.test.js \
                             || echo "⚠️ SonarQube scan terminé"
                         """
