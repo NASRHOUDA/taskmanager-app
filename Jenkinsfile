@@ -197,33 +197,17 @@ pipeline {
         // ============================================
         stage('Push to Docker Hub') {
             steps {
-                script {
-                    def dockerSecrets = sh(script: '''
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_URL}/v1/secret/data/taskmanager/docker
-                    ''', returnStdout: true).trim()
-
-                    def DOCKER_USER = sh(script: """
-                        echo '${dockerSecrets}' | jq -r '.data.data.username'
-                    """, returnStdout: true).trim()
-
-                    def DOCKER_PASS = sh(script: """
-                        echo '${dockerSecrets}' | jq -r '.data.data.password'
-                    """, returnStdout: true).trim()
-
-                    sh """
-                        echo '${DOCKER_PASS}' | docker login -u '${DOCKER_USER}' --password-stdin
-                        docker push ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}
-                        docker push ${DOCKER_IMAGE_BACKEND}:latest
-                        docker push ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER}
-                        docker push ${DOCKER_IMAGE_FRONTEND}:latest
-                        docker logout
-                        echo "✅ Images poussées vers Docker Hub"
-                    """
-                }
+                sh """
+                    echo '${DOCKER_PASS}' | docker login -u '${DOCKER_USER}' --password-stdin
+                    docker push ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}
+                    docker push ${DOCKER_IMAGE_BACKEND}:latest
+                    docker push ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER}
+                    docker push ${DOCKER_IMAGE_FRONTEND}:latest
+                    docker logout
+                    echo "✅ Images poussées vers Docker Hub"
+                """
             }
         }
-
         // ============================================
         // STAGE 11: Update Manifests (GitOps)
         // ============================================
