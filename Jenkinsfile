@@ -182,7 +182,6 @@ pipeline {
                               -Dsonar.token=${SONAR_TOKEN} \
                               -Dsonar.exclusions=node_modules/**,**/*.test.js \
                               -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                              -Dsonar.testExecutionReportPaths=coverage/test-report.xml \
                               -Dsonar.tests=tests \
                               -Dsonar.test.inclusions=tests/**/*.test.js
                         '''
