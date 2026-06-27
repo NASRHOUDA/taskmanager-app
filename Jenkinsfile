@@ -213,14 +213,12 @@ stage('OWASP Dependency Check') {
           --scan /src \
           --format JSON \
           --out /report/dependency-check-report.json \
-          --noupdate \
-          --verbose || true
+          --noupdate || true
         
         REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json"
         if [ -f "$REPORT_PATH" ]; then
             echo "✅ OWASP Rapport JSON généré avec succès"
             echo "📊 Taille du rapport: $(du -h $REPORT_PATH | cut -f1)"
-            echo "📈 Rapport contient les données de vulnérabilités"
         else
             echo "⚠️ OWASP: Rapport JSON non généré - voir logs ci-dessus"
             ls -la /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/ || echo "Dossier output vide"
