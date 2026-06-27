@@ -228,13 +228,24 @@ stage('OWASP Dependency Check') {
           --project taskmanager-backend \
           --scan /src \
           --format JSON \
-          --out /report/dependency-check-report.json \
-          --noupdate || true
+          --format HTML \
+          --out /report \
+          --noupdate \
+          --exclude "**/node_modules/**" || true
         
         REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json"
         if [ -f "$REPORT_PATH" ]; then
-            echo "✅ OWASP Rapport JSON généré avec succès"
+            echo "✅ OWASP Rapport généré avec succès"
             echo "📊 Taille du rapport: $(du -h $REPORT_PATH | cut -f1)"
+            
+            CRITICAL=$(cat $REPORT_PATH | grep -o '"severity":"CRITICAL"' | wc -l || echo "0")
+            HIGH=$(cat $REPORT_PATH | grep -o '"severity":"HIGH"' | wc -l || echo "0")
+            MEDIUM=$(cat $REPORT_PATH | grep -o '"severity":"MEDIUM"' | wc -l || echo "0")
+            
+            echo "📈 Vulnérabilités détectées:"
+            echo "   🔴 CRITICAL: $CRITICAL"
+            echo "   🟠 HIGH: $HIGH"
+            echo "   🟡 MEDIUM: $MEDIUM"
         else
             echo "⚠️ OWASP: Rapport JSON non généré - voir logs ci-dessus"
             ls -la /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/ || echo "Dossier output vide"
