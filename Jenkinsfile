@@ -151,9 +151,8 @@ pipeline {
           -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
           returntocorp/semgrep:latest \
           semgrep --config=p/nodejs --config=p/security-audit /src \
-          --include='^(?!node_modules).*\\.js$' \
-          --no-git-ignore \
-          --skip-unknown-extensions \
+          --include='**/*.js' \
+          --exclude='node_modules' \
           --json --output=/src/semgrep-report.json
         
         if [ -f /src/semgrep-report.json ]; then
