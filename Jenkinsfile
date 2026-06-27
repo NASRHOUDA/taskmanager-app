@@ -234,15 +234,28 @@ pipeline {
 
         stage('Update Manifests') {
             steps {
-                sh """
+                sh '''
+                    set -e
+                    
                     git config user.email jenkins@taskmanager.com
                     git config user.name "Jenkins CI"
+                    
+                    export GIT_TERMINAL_PROMPT=0
+                    
                     sed -i "s|image: houdanasr/taskmanager-backend:.*|image: houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
                     sed -i "s|image: houdanasr/taskmanager-frontend:.*|image: houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
+                    
                     git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
-                    git commit -m "ci: update image tags to build #${BUILD_NUMBER}" || echo "Nothing to commit"
-                    git push https://${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main || echo "⚠️ Git push terminé"
-                """
+                    
+                    if ! git commit -m "ci: update image tags to build #${BUILD_NUMBER}"; then
+                        echo "⚠️ No changes to commit"
+                    fi
+                    
+                    # Push avec GH_USER et GH_TOKEN depuis Vault
+                    git push https://${GH_USER}:${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
+                    
+                    echo "✅ Manifests pushed successfully to GitHub"
+                '''
             }
         }
 
