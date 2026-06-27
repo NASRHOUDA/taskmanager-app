@@ -147,20 +147,26 @@ pipeline {
         stage('SAST - Semgrep') {
     steps {
         sh '''
-            docker run --rm \
-              -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
-              returntocorp/semgrep:latest \
-              semgrep --config=p/nodejs \
-              --config=p/security-audit \
-              /src \
-              --include="*.js" \
-              --no-git-ignore \
-              --json --output=/src/semgrep-report.json \
-            || echo "⚠️ Semgrep scan terminé"
+        docker run --rm \
+          -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
+          returntocorp/semgrep:latest \
+          semgrep --config=p/nodejs --config=p/security-audit /src \
+          --include="**/*.js" \
+          --exclude="node_modules" \
+          --skip-unknown-extensions \
+          --json --output=/src/semgrep-report.json
+        
+        if [ -f /src/semgrep-report.json ]; then
+            echo "✅ Semgrep scan complété"
+            FINDINGS=$(jq '.results | length' /src/semgrep-report.json 2>/dev/null || echo "0")
+            echo "📊 Findings détectés: $FINDINGS"
+        else
+            echo "⚠️ Rapport Semgrep non généré"
+            exit 1
+        fi
         '''
     }
 }
-
         stage('SonarQube Analysis') {
             steps {
                 dir('backend') {
@@ -179,23 +185,36 @@ pipeline {
             }
         }
 
-        // NOUVEAU
+
 stage('OWASP Dependency Check') {
     steps {
         sh '''
-            mkdir -p /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
-            chmod 777 /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
-            docker run --rm \
-              -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
-              -v /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output:/report \
-              -v owasp-data:/usr/share/dependency-check/data \
-              owasp/dependency-check:latest \
-              --project "taskmanager-backend" \
-              --scan /src \
-              --format JSON \
-              --out /report \
-              --noupdate \
-            || echo "⚠️ OWASP scan terminé"
+        set -e
+        mkdir -p /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
+        chmod 777 /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
+        
+        echo "🔍 Lancement OWASP Dependency Check..."
+        docker run --rm \
+          -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
+          -v /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output:/report \
+          -v owasp-cache:/usr/share/dependency-check/data \
+          owasp/dependency-check:latest \
+          --project taskmanager-backend \
+          --scan /src \
+          --format JSON \
+          --out /report/dependency-check-report.json \
+          --noupdate \
+          --verbose || true
+        
+        REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json"
+        if [ -f "$REPORT_PATH" ]; then
+            echo "✅ OWASP Rapport JSON généré avec succès"
+            echo "📊 Taille du rapport: $(du -h $REPORT_PATH | cut -f1)"
+            echo "📈 Rapport contient les données de vulnérabilités"
+        else
+            echo "⚠️ OWASP: Rapport JSON non généré - voir logs ci-dessus"
+            ls -la /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/ || echo "Dossier output vide"
+        fi
         '''
     }
 }
