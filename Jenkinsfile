@@ -145,17 +145,21 @@ pipeline {
         }
 
         stage('SAST - Semgrep') {
-            steps {
-                sh '''
-                    docker run --rm \
-                      -v ${JENKINS_WS}/backend:/src \
-                      returntocorp/semgrep:latest \
-                      semgrep --config=p/security-audit /src --no-git-ignore \
-                      --json --output=/src/semgrep-report.json \
-                    || echo "⚠️ Semgrep scan terminé"
-                '''
-            }
-        }
+    steps {
+        sh '''
+            docker run --rm \
+              -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
+              returntocorp/semgrep:latest \
+              semgrep --config=p/nodejs \
+              --config=p/security-audit \
+              /src \
+              --include="*.js" \
+              --no-git-ignore \
+              --json --output=/src/semgrep-report.json \
+            || echo "⚠️ Semgrep scan terminé"
+        '''
+    }
+}
 
         stage('SonarQube Analysis') {
             steps {
