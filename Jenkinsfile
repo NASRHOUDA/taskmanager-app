@@ -183,7 +183,7 @@ pipeline {
                     withSonarQubeEnv('SonarQube') {
                         sh '''
                             npx sonar-scanner \
-                              -Dsonar.projectKey=taskmanager-backend \
+                              -Dsonar.projectKey=taskmanager \
                               -Dsonar.sources=. \
                               -Dsonar.host.url=http://host.docker.internal:9000 \
                               -Dsonar.token=${SONAR_TOKEN} \
