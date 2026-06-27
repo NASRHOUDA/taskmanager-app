@@ -183,10 +183,11 @@ pipeline {
 stage('OWASP Dependency Check') {
     steps {
         sh '''
-            mkdir -p ${JENKINS_WS}/owasp-output
+            mkdir -p /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
+            chmod 777 /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
             docker run --rm \
-              -v ${JENKINS_WS}/backend:/src \
-              -v ${JENKINS_WS}/owasp-output:/report \
+              -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
+              -v /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output:/report \
               -v owasp-data:/usr/share/dependency-check/data \
               owasp/dependency-check:latest \
               --project "taskmanager-backend" \
