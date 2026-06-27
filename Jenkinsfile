@@ -193,8 +193,8 @@ pipeline {
         stage('SonarQube Quality Gate') {
     steps {
         script {
-            echo "⏳ Attente webhook SonarQube..."
-            def qg = waitForQualityGate(webhookSecretKey: 'sonar-webhook-secret-2024')
+            echo "⏳ Attente Quality Gate..."
+            def qg = waitForQualityGate()  // ← Sans paramètres
             if (qg.status != 'OK') {
                 error "❌ Quality Gate FAILED: ${qg.status}"
             }
@@ -204,45 +204,37 @@ pipeline {
 }
 
         stage('OWASP Dependency Check') {
-            steps {
-                sh '''
-                    set -e
-                    mkdir -p /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
-                    chmod 777 /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
+    steps {
+        sh '''
+            mkdir -p /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
+            chmod 777 /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
 
-                    echo "🔍 Lancement OWASP Dependency Check..."
-                    docker run --rm \
-                      -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
-                      -v /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output:/report \
-                      -v owasp-cache:/usr/share/dependency-check/data \
-                      owasp/dependency-check:latest \
-                      --project taskmanager-backend \
-                      --scan /src \
-                      --format JSON \
-                      --format HTML \
-                      --out /report \
-                      --noupdate \
-                      --exclude "**/node_modules/**" || true
+            echo "🔍 Lancement OWASP Dependency Check (avec cache pré-chargé)..."
+            docker run --rm --user root \
+              -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src:ro \
+              -v /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output:/report:rw \
+              -v owasp-cache:/usr/share/dependency-check/data:ro \
+              owasp/dependency-check:latest \
+              --project taskmanager-backend \
+              --scan /src \
+              --format JSON \
+              --format HTML \
+              --out /report \
+              --exclude "**/node_modules/**" || true
 
-                    REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json"
-                    if [ -f "$REPORT_PATH" ]; then
-                        echo "✅ OWASP Rapport généré avec succès"
-                        echo "📊 Taille du rapport: $(du -h $REPORT_PATH | cut -f1)"
-                        CRITICAL=$(grep -o '"severity":"CRITICAL"' $REPORT_PATH | wc -l || echo "0")
-                        HIGH=$(grep -o '"severity":"HIGH"' $REPORT_PATH | wc -l || echo "0")
-                        MEDIUM=$(grep -o '"severity":"MEDIUM"' $REPORT_PATH | wc -l || echo "0")
-                        echo "📈 Vulnérabilités détectées:"
-                        echo "   🔴 CRITICAL: $CRITICAL"
-                        echo "   🟠 HIGH: $HIGH"
-                        echo "   🟡 MEDIUM: $MEDIUM"
-                    else
-                        echo "⚠️ OWASP: Rapport JSON non généré - voir logs ci-dessus"
-                        ls -la /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/ || true
-                    fi
-                '''
-            }
-        }
-
+            if [ -f /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json ]; then
+                echo "✅ OWASP Rapport généré avec succès"
+                CRITICAL=$(grep -c '"severity":"CRITICAL"' /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json || echo "0")
+                HIGH=$(grep -c '"severity":"HIGH"' /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json || echo "0")
+                echo "   🔴 CRITICAL: $CRITICAL"
+                echo "   🟠 HIGH: $HIGH"
+            else
+                echo "⚠️ Rapport JSON non généré - HTML disponible"
+                ls -la /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/
+            fi
+        '''
+    }
+}
         stage('Build Docker Images') {
             steps {
                 sh """
