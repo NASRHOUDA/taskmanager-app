@@ -324,19 +324,36 @@ stage('Trivy Image Scan') {
 }
 
         stage('Checkov - IaC Scan') {
-            steps {
-                sh '''
-                    docker run --rm \
-                      -v ${JENKINS_WS}/kubernetes:/work \
-                      bridgecrew/checkov:latest \
-                      -d /work \
-                      --framework kubernetes \
-                      --soft-fail \
-                    || echo "✅ Checkov scan terminé"
-                '''
-            }
-        }
+    steps {
+        sh '''
+            echo "🔍 Lancement Checkov IaC Scan..."
+            
+            docker run --rm \
+              -v ${JENKINS_WS}/kubernetes:/work \
+              bridgecrew/checkov:latest \
+              -d /work \
+              --framework kubernetes \
+              --soft-fail \
+              --output cli \
+              --compact > /tmp/checkov-output.txt 2>&1 || true
+            
+            cat /tmp/checkov-output.txt
+            
+            PASSED=$(grep -c "PASSED" /tmp/checkov-output.txt || echo "0")
+            FAILED=$(grep -c "FAILED" /tmp/checkov-output.txt || echo "0")
+            
+            echo "📊 Checkov Results:"
+            echo "   ✅ Passed: $PASSED"
+            echo "   ❌ Failed: $FAILED"
+            
+            if [ "$FAILED" -gt "0" ]; then
+                echo "⚠️ $FAILED IaC issues détectés - voir rapport ci-dessus"
+            else
+                echo "✅ Checkov scan terminé sans problèmes critiques"
+            fi
+        '''
     }
+}
 
     post {
         success { echo '✅ Pipeline DevSecOps réussi !' }
