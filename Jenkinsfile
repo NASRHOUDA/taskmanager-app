@@ -274,23 +274,22 @@ stage('Trivy Image Scan') {
         }
 
         stage('Flux Reconciliation') {
-            steps {
-                sh '''
-                    sleep 30
-                    flux reconcile source git flux-system --timeout=3m || true
-                    flux reconcile kustomization taskmanager --timeout=3m || true
-                    sleep 20
-                    echo "📊 Flux status:"
-                    flux get kustomizations
-                    echo "📊 Pods:"
-                    kubectl get pods -n taskmanager || true
-                    // AJOUTER après kubectl get pods
-kubectl rollout status deployment/backend -n taskmanager --timeout=2m || true
-kubectl rollout status deployment/frontend -n taskmanager --timeout=2m || true
-                    echo "✅ Déploiement Flux CD complété"
-                '''
-            }
-        }
+    steps {
+        sh '''
+            sleep 30
+            flux reconcile source git flux-system --timeout=3m || true
+            flux reconcile kustomization taskmanager --timeout=3m || true
+            sleep 20
+            echo "📊 Flux status:"
+            flux get kustomizations
+            echo "📊 Pods:"
+            kubectl get pods -n taskmanager || true
+            kubectl rollout status deployment/backend -n taskmanager --timeout=2m || true
+            kubectl rollout status deployment/frontend -n taskmanager --timeout=2m || true
+            echo "✅ Déploiement Flux CD complété"
+        '''
+    }
+}
 
         stage('Checkov - IaC Scan') {
             steps {
