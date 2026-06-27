@@ -175,22 +175,25 @@ pipeline {
             }
         }
 
-        stage('OWASP Dependency Check') {
-            steps {
-                sh '''
-                    docker run --rm \
-                      -v ${JENKINS_WS}/backend:/src \
-                      -v owasp-data:/usr/share/dependency-check/data \
-                      owasp/dependency-check:latest \
-                      --project "taskmanager-backend" \
-                      --scan /src \
-                      --format JSON \
-                      --out /src/owasp-report.json \
-                      --noupdate \
-                    || echo "⚠️ OWASP scan terminé"
-                '''
-            }
-        }
+        // NOUVEAU
+stage('OWASP Dependency Check') {
+    steps {
+        sh '''
+            mkdir -p ${JENKINS_WS}/owasp-output
+            docker run --rm \
+              -v ${JENKINS_WS}/backend:/src \
+              -v ${JENKINS_WS}/owasp-output:/report \
+              -v owasp-data:/usr/share/dependency-check/data \
+              owasp/dependency-check:latest \
+              --project "taskmanager-backend" \
+              --scan /src \
+              --format JSON \
+              --out /report \
+              --noupdate \
+            || echo "⚠️ OWASP scan terminé"
+        '''
+    }
+}
 
         stage('Build Docker Images') {
             steps {
@@ -210,25 +213,28 @@ pipeline {
             }
         }
 
-        stage('Trivy Image Scan') {
-            steps {
-                sh """
-                    docker run --rm \
-                      -v /var/run/docker.sock:/var/run/docker.sock \
-                      aquasec/trivy:latest image \
-                      --severity HIGH,CRITICAL \
-                      --exit-code 0 \
-                      ${DOCKER_IMAGE_BACKEND}:latest
+        // NOUVEAU
+stage('Trivy Image Scan') {
+    steps {
+        sh """
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v trivy-cache:/root/.cache/trivy \
+              aquasec/trivy:latest image \
+              --severity HIGH,CRITICAL \
+              --exit-code 0 \
+              ${DOCKER_IMAGE_BACKEND}:latest
 
-                    docker run --rm \
-                      -v /var/run/docker.sock:/var/run/docker.sock \
-                      aquasec/trivy:latest image \
-                      --severity HIGH,CRITICAL \
-                      --exit-code 0 \
-                      ${DOCKER_IMAGE_FRONTEND}:latest
-                """
-            }
-        }
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v trivy-cache:/root/.cache/trivy \
+              aquasec/trivy:latest image \
+              --severity HIGH,CRITICAL \
+              --exit-code 0 \
+              ${DOCKER_IMAGE_FRONTEND}:latest
+        """
+    }
+}
 
         stage('Push to Docker Hub') {
             steps {
@@ -278,6 +284,9 @@ pipeline {
                     flux get kustomizations
                     echo "📊 Pods:"
                     kubectl get pods -n taskmanager || true
+                    // AJOUTER après kubectl get pods
+kubectl rollout status deployment/backend -n taskmanager --timeout=2m || true
+kubectl rollout status deployment/frontend -n taskmanager --timeout=2m || true
                     echo "✅ Déploiement Flux CD complété"
                 '''
             }
