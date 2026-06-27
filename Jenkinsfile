@@ -234,6 +234,22 @@ pipeline {
 
         stage('Update Manifests') {
             steps {
+                script {
+                    // Récupère le token depuis Vault (sans avoir besoin de GH_USER)
+                    def githubSecrets = sh(script: """
+                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
+                          ${VAULT_ADDR}/v1/secret/data/taskmanager/github
+                    """, returnStdout: true).trim()
+                    
+                    // Extract token avec Python
+                    env.GH_TOKEN = sh(script: """
+                        echo '${githubSecrets}' | python3 -c "import sys, json; d=json.load(sys.stdin); print(d['data']['data']['token'])"
+                    """, returnStdout: true).trim()
+                    
+                    // Set le username hardcodé (on le sait: NASRHOUDA)
+                    env.GH_USER = 'NASRHOUDA'
+                }
+                
                 sh '''
                     set -e
                     
@@ -251,7 +267,11 @@ pipeline {
                         echo "⚠️ No changes to commit"
                     fi
                     
-                    # Push avec GH_USER et GH_TOKEN depuis Vault
+                    # Debug: vérifier que GH_USER et GH_TOKEN sont set
+                    echo "GH_USER: ${GH_USER}"
+                    echo "GH_TOKEN length: ${#GH_TOKEN}"
+                    
+                    # Push avec les credentials
                     git push https://${GH_USER}:${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
                     
                     echo "✅ Manifests pushed successfully to GitHub"
