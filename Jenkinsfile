@@ -6,6 +6,7 @@ pipeline {
         DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
         VAULT_ADDR            = 'http://host.docker.internal:8200'
         VAULT_TOKEN           = 'root'
+        JENKINS_WS            = '/var/lib/docker/volumes/jenkins_home/_data/workspace/taskmanager-pipeline'
     }
 
     options {
@@ -19,6 +20,20 @@ pipeline {
             steps {
                 checkout scm
                 echo '📦 Code récupéré depuis GitHub'
+            }
+        }
+
+        stage('Gitleaks - Secret Scan') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v ${JENKINS_WS}:/path \
+                      zricethezav/gitleaks:latest \
+                      detect --source=/path \
+                      --no-git \
+                      --exit-code=0 \
+                    || echo "⚠️ Gitleaks scan terminé"
+                '''
             }
         }
 
@@ -37,6 +52,7 @@ pipeline {
                           ${VAULT_ADDR}/v1/secret/data/taskmanager/github
                     """, returnStdout: true).trim()
                     env.GH_TOKEN = sh(script: "echo '${githubSecrets}' | jq -r '.data.data.token'", returnStdout: true).trim()
+                    env.GH_USER   = 'NASRHOUDA'
 
                     def sonarSecrets = sh(script: """
                         curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
@@ -130,16 +146,14 @@ pipeline {
 
         stage('SAST - Semgrep') {
             steps {
-                dir('backend') {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/src \
-                          returntocorp/semgrep:latest \
-                          semgrep --config=p/security-audit /src --no-git-ignore \
-                          --json --output=/src/semgrep-report.json \
-                        || echo "⚠️ Semgrep scan terminé"
-                    '''
-                }
+                sh '''
+                    docker run --rm \
+                      -v ${JENKINS_WS}/backend:/src \
+                      returntocorp/semgrep:latest \
+                      semgrep --config=p/security-audit /src --no-git-ignore \
+                      --json --output=/src/semgrep-report.json \
+                    || echo "⚠️ Semgrep scan terminé"
+                '''
             }
         }
 
@@ -163,20 +177,18 @@ pipeline {
 
         stage('OWASP Dependency Check') {
             steps {
-                dir('backend') {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/src \
-                          -v owasp-data:/usr/share/dependency-check/data \
-                          owasp/dependency-check:latest \
-                          --project "taskmanager-backend" \
-                          --scan /src \
-                          --format JSON \
-                          --out /src/owasp-report.json \
-                          --noupdate \
-                        || echo "⚠️ OWASP scan terminé"
-                    '''
-                }
+                sh '''
+                    docker run --rm \
+                      -v ${JENKINS_WS}/backend:/src \
+                      -v owasp-data:/usr/share/dependency-check/data \
+                      owasp/dependency-check:latest \
+                      --project "taskmanager-backend" \
+                      --scan /src \
+                      --format JSON \
+                      --out /src/owasp-report.json \
+                      --noupdate \
+                    || echo "⚠️ OWASP scan terminé"
+                '''
             }
         }
 
@@ -234,46 +246,22 @@ pipeline {
 
         stage('Update Manifests') {
             steps {
-                script {
-                    // Récupère le token depuis Vault (sans avoir besoin de GH_USER)
-                    def githubSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/github
-                    """, returnStdout: true).trim()
-                    
-                    // Extract token avec Python
-                    env.GH_TOKEN = sh(script: """
-                        echo '${githubSecrets}' | python3 -c "import sys, json; d=json.load(sys.stdin); print(d['data']['data']['token'])"
-                    """, returnStdout: true).trim()
-                    
-                    // Set le username hardcodé (on le sait: NASRHOUDA)
-                    env.GH_USER = 'NASRHOUDA'
-                }
-                
                 sh '''
                     set -e
-                    
                     git config user.email jenkins@taskmanager.com
                     git config user.name "Jenkins CI"
-                    
                     export GIT_TERMINAL_PROMPT=0
-                    
+
                     sed -i "s|image: houdanasr/taskmanager-backend:.*|image: houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
                     sed -i "s|image: houdanasr/taskmanager-frontend:.*|image: houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
-                    
+
                     git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
-                    
+
                     if ! git commit -m "ci: update image tags to build #${BUILD_NUMBER}"; then
                         echo "⚠️ No changes to commit"
                     fi
-                    
-                    # Debug: vérifier que GH_USER et GH_TOKEN sont set
-                    echo "GH_USER: ${GH_USER}"
-                    echo "GH_TOKEN length: ${#GH_TOKEN}"
-                    
-                    # Push avec les credentials
+
                     git push https://${GH_USER}:${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
-                    
                     echo "✅ Manifests pushed successfully to GitHub"
                 '''
             }
@@ -299,7 +287,7 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm \
-                      -v $(pwd)/kubernetes:/work \
+                      -v ${JENKINS_WS}/kubernetes:/work \
                       bridgecrew/checkov:latest \
                       -d /work \
                       --framework kubernetes \
