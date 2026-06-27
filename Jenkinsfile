@@ -147,18 +147,28 @@ pipeline {
         stage('SAST - Semgrep') {
     steps {
         sh '''
+        # On utilise --volumes-from pour accéder au dossier interne de Jenkins
+        # Le rapport est écrit directement dans le dossier du workspace
         docker run --rm \
-          -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
+          --volumes-from jenkins \
           returntocorp/semgrep:latest \
-          semgrep --config=p/nodejs --config=p/security-audit /src \
+          semgrep --config=p/nodejs --config=p/security-audit /var/jenkins_home/workspace/taskmanager-pipeline/backend \
           --include='**/*.js' \
           --exclude='node_modules' \
-          --json --output=/src/semgrep-report.json
+          --json --output=/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json
         
-        if [ -f /src/semgrep-report.json ]; then
+        # Vérification du rapport sur le chemin réel de Jenkins
+        REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json"
+        
+        if [ -f "$REPORT_PATH" ]; then
             echo "✅ Semgrep scan complété"
-            FINDINGS=$(jq '.results | length' /src/semgrep-report.json 2>/dev/null || echo "0")
-            echo "📊 Findings détectés: $FINDINGS"
+            # Installation temporaire de jq dans le conteneur Jenkins si absent pour parser le JSON
+            if command -v jq >/dev/null 2>&1; then
+                FINDINGS=$(jq '.results | length' "$REPORT_PATH" 2>/dev/null || echo "0")
+                echo "📊 Findings détectés: $FINDINGS"
+            else
+                echo "📊 Rapport généré avec succès (Installez 'jq' sur Jenkins pour afficher le nombre de vulnérabilités)."
+            fi
         else
             echo "⚠️ Rapport Semgrep non généré"
             exit 1
@@ -166,6 +176,7 @@ pipeline {
         '''
     }
 }
+
         stage('SonarQube Analysis') {
             steps {
                 dir('backend') {
