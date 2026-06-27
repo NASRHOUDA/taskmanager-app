@@ -6,7 +6,7 @@ pipeline {
         DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
         VAULT_ADDR            = 'http://host.docker.internal:8200'
         VAULT_TOKEN           = 'root'
-        JENKINS_WS            = '/var/lib/docker/volumes/jenkins_home/_data/workspace/taskmanager-pipeline'
+        JENKINS_WS = '/var/jenkins_home/workspace/taskmanager-pipeline'
     }
 
     options {
