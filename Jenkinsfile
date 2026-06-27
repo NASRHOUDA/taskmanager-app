@@ -52,7 +52,7 @@ pipeline {
                           ${VAULT_ADDR}/v1/secret/data/taskmanager/github
                     """, returnStdout: true).trim()
                     env.GH_TOKEN = sh(script: "echo '${githubSecrets}' | jq -r '.data.data.token'", returnStdout: true).trim()
-                    env.GH_USER   = 'NASRHOUDA'
+                    env.GH_USER  = 'NASRHOUDA'
 
                     def sonarSecrets = sh(script: """
                         curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
@@ -145,114 +145,104 @@ pipeline {
         }
 
         stage('SAST - Semgrep') {
-    steps {
-        sh '''
-        # On utilise --volumes-from pour accéder au dossier interne de Jenkins
-        # Le rapport est écrit directement dans le dossier du workspace
-        docker run --rm \
-          --volumes-from jenkins \
-          returntocorp/semgrep:latest \
-          semgrep --config=p/nodejs --config=p/security-audit /var/jenkins_home/workspace/taskmanager-pipeline/backend \
-          --include='**/*.js' \
-          --exclude='node_modules' \
-          --json --output=/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json
-        
-        # Vérification du rapport sur le chemin réel de Jenkins
-        REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json"
-        
-        if [ -f "$REPORT_PATH" ]; then
-            echo "✅ Semgrep scan complété"
-            # Installation temporaire de jq dans le conteneur Jenkins si absent pour parser le JSON
-            if command -v jq >/dev/null 2>&1; then
-                FINDINGS=$(jq '.results | length' "$REPORT_PATH" 2>/dev/null || echo "0")
-                echo "📊 Findings détectés: $FINDINGS"
-            else
-                echo "📊 Rapport généré avec succès (Installez 'jq' sur Jenkins pour afficher le nombre de vulnérabilités)."
-            fi
-        else
-            echo "⚠️ Rapport Semgrep non généré"
-            exit 1
-        fi
-        '''
-    }
-}
-
-        stage('SonarQube Analysis') {
-    steps {
-        dir('backend') {
-            withSonarQubeEnv('SonarQube') {
+            steps {
                 sh '''
-                    npx sonar-scanner \
-                      -Dsonar.projectKey=taskmanager \
-                      -Dsonar.sources=. \
-                      -Dsonar.host.url=http://host.docker.internal:9000 \
-                      -Dsonar.token=${SONAR_TOKEN} \
-                      -Dsonar.exclusions=node_modules/**,**/*.test.js \
-                      -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                      -Dsonar.testExecutionReportPaths=coverage/test-report.xml \
-                      -Dsonar.tests=tests \
-                      -Dsonar.test.inclusions=tests/**/*.test.js
+                    docker run --rm \
+                      --volumes-from jenkins \
+                      returntocorp/semgrep:latest \
+                      semgrep --config=p/nodejs --config=p/security-audit /var/jenkins_home/workspace/taskmanager-pipeline/backend \
+                      --include='**/*.js' \
+                      --exclude='node_modules' \
+                      --json --output=/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json
+
+                    REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json"
+                    if [ -f "$REPORT_PATH" ]; then
+                        echo "✅ Semgrep scan complété"
+                        if command -v jq >/dev/null 2>&1; then
+                            FINDINGS=$(jq '.results | length' "$REPORT_PATH" 2>/dev/null || echo "0")
+                            echo "📊 Findings détectés: $FINDINGS"
+                        fi
+                    else
+                        echo "⚠️ Rapport Semgrep non généré"
+                        exit 1
+                    fi
                 '''
             }
         }
-    }
-}
 
-stage('SonarQube Quality Gate') {
-    steps {
-        script {
-            def qg = waitForQualityGate()
-            if (qg.status != 'OK') {
-                echo "⚠️ Quality Gate status: ${qg.status} - Pipeline continue"
-            } else {
-                echo "✅ Quality Gate passed: ${qg.status}"
+        stage('SonarQube Analysis') {
+            steps {
+                dir('backend') {
+                    withSonarQubeEnv('SonarQube') {
+                        sh '''
+                            npx sonar-scanner \
+                              -Dsonar.projectKey=taskmanager \
+                              -Dsonar.sources=. \
+                              -Dsonar.host.url=http://host.docker.internal:9000 \
+                              -Dsonar.token=${SONAR_TOKEN} \
+                              -Dsonar.exclusions=node_modules/**,**/*.test.js \
+                              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                              -Dsonar.testExecutionReportPaths=coverage/test-report.xml \
+                              -Dsonar.tests=tests \
+                              -Dsonar.test.inclusions=tests/**/*.test.js
+                        '''
+                    }
+                }
             }
         }
-    }
-}
 
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    def qg = waitForQualityGate()
+                    if (qg.status != 'OK') {
+                        echo "⚠️ Quality Gate status: ${qg.status} - Pipeline continue"
+                    } else {
+                        echo "✅ Quality Gate passed: ${qg.status}"
+                    }
+                }
+            }
+        }
 
-stage('OWASP Dependency Check') {
-    steps {
-        sh '''
-        set -e
-        mkdir -p /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
-        chmod 777 /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
-        
-        echo "🔍 Lancement OWASP Dependency Check..."
-        docker run --rm \
-          -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
-          -v /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output:/report \
-          -v owasp-cache:/usr/share/dependency-check/data \
-          owasp/dependency-check:latest \
-          --project taskmanager-backend \
-          --scan /src \
-          --format JSON \
-          --format HTML \
-          --out /report \
-          --noupdate \
-          --exclude "**/node_modules/**" || true
-        
-        REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json"
-        if [ -f "$REPORT_PATH" ]; then
-            echo "✅ OWASP Rapport généré avec succès"
-            echo "📊 Taille du rapport: $(du -h $REPORT_PATH | cut -f1)"
-            
-            CRITICAL=$(cat $REPORT_PATH | grep -o '"severity":"CRITICAL"' | wc -l || echo "0")
-            HIGH=$(cat $REPORT_PATH | grep -o '"severity":"HIGH"' | wc -l || echo "0")
-            MEDIUM=$(cat $REPORT_PATH | grep -o '"severity":"MEDIUM"' | wc -l || echo "0")
-            
-            echo "📈 Vulnérabilités détectées:"
-            echo "   🔴 CRITICAL: $CRITICAL"
-            echo "   🟠 HIGH: $HIGH"
-            echo "   🟡 MEDIUM: $MEDIUM"
-        else
-            echo "⚠️ OWASP: Rapport JSON non généré - voir logs ci-dessus"
-            ls -la /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/ || echo "Dossier output vide"
-        fi
-        '''
-    }
-}
+        stage('OWASP Dependency Check') {
+            steps {
+                sh '''
+                    set -e
+                    mkdir -p /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
+                    chmod 777 /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
+
+                    echo "🔍 Lancement OWASP Dependency Check..."
+                    docker run --rm \
+                      -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src \
+                      -v /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output:/report \
+                      -v owasp-cache:/usr/share/dependency-check/data \
+                      owasp/dependency-check:latest \
+                      --project taskmanager-backend \
+                      --scan /src \
+                      --format JSON \
+                      --format HTML \
+                      --out /report \
+                      --noupdate \
+                      --exclude "**/node_modules/**" || true
+
+                    REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json"
+                    if [ -f "$REPORT_PATH" ]; then
+                        echo "✅ OWASP Rapport généré avec succès"
+                        echo "📊 Taille du rapport: $(du -h $REPORT_PATH | cut -f1)"
+                        CRITICAL=$(grep -o '"severity":"CRITICAL"' $REPORT_PATH | wc -l || echo "0")
+                        HIGH=$(grep -o '"severity":"HIGH"' $REPORT_PATH | wc -l || echo "0")
+                        MEDIUM=$(grep -o '"severity":"MEDIUM"' $REPORT_PATH | wc -l || echo "0")
+                        echo "📈 Vulnérabilités détectées:"
+                        echo "   🔴 CRITICAL: $CRITICAL"
+                        echo "   🟠 HIGH: $HIGH"
+                        echo "   🟡 MEDIUM: $MEDIUM"
+                    else
+                        echo "⚠️ OWASP: Rapport JSON non généré - voir logs ci-dessus"
+                        ls -la /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/ || true
+                    fi
+                '''
+            }
+        }
 
         stage('Build Docker Images') {
             steps {
@@ -272,28 +262,27 @@ stage('OWASP Dependency Check') {
             }
         }
 
-        // NOUVEAU
-stage('Trivy Image Scan') {
-    steps {
-        sh """
-            docker run --rm \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v trivy-cache:/root/.cache/trivy \
-              aquasec/trivy:latest image \
-              --severity HIGH,CRITICAL \
-              --exit-code 0 \
-              ${DOCKER_IMAGE_BACKEND}:latest
+        stage('Trivy Image Scan') {
+            steps {
+                sh """
+                    docker run --rm \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v trivy-cache:/root/.cache/trivy \
+                      aquasec/trivy:latest image \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 0 \
+                      ${DOCKER_IMAGE_BACKEND}:latest
 
-            docker run --rm \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v trivy-cache:/root/.cache/trivy \
-              aquasec/trivy:latest image \
-              --severity HIGH,CRITICAL \
-              --exit-code 0 \
-              ${DOCKER_IMAGE_FRONTEND}:latest
-        """
-    }
-}
+                    docker run --rm \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v trivy-cache:/root/.cache/trivy \
+                      aquasec/trivy:latest image \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 0 \
+                      ${DOCKER_IMAGE_FRONTEND}:latest
+                """
+            }
+        }
 
         stage('Push to Docker Hub') {
             steps {
@@ -333,54 +322,56 @@ stage('Trivy Image Scan') {
         }
 
         stage('Flux Reconciliation') {
-    steps {
-        sh '''
-            sleep 30
-            flux reconcile source git flux-system --timeout=3m || true
-            flux reconcile kustomization taskmanager --timeout=3m || true
-            sleep 20
-            echo "📊 Flux status:"
-            flux get kustomizations
-            echo "📊 Pods:"
-            kubectl get pods -n taskmanager || true
-            kubectl rollout status deployment/backend -n taskmanager --timeout=2m || true
-            kubectl rollout status deployment/frontend -n taskmanager --timeout=2m || true
-            echo "✅ Déploiement Flux CD complété"
-        '''
-    }
-}
+            steps {
+                sh '''
+                    sleep 30
+                    flux reconcile source git flux-system --timeout=3m || true
+                    flux reconcile kustomization taskmanager --timeout=3m || true
+                    sleep 20
+                    echo "📊 Flux status:"
+                    flux get kustomizations
+                    echo "📊 Pods:"
+                    kubectl get pods -n taskmanager || true
+                    kubectl rollout status deployment/backend -n taskmanager --timeout=2m || true
+                    kubectl rollout status deployment/frontend -n taskmanager --timeout=2m || true
+                    echo "✅ Déploiement Flux CD complété"
+                '''
+            }
+        }
 
         stage('Checkov - IaC Scan') {
-    steps {
-        sh '''
-            echo "🔍 Lancement Checkov IaC Scan..."
-            
-            docker run --rm \
-              -v ${JENKINS_WS}/kubernetes:/work \
-              bridgecrew/checkov:latest \
-              -d /work \
-              --framework kubernetes \
-              --soft-fail \
-              --output cli \
-              --compact > /tmp/checkov-output.txt 2>&1 || true
-            
-            cat /tmp/checkov-output.txt
-            
-            PASSED=$(grep -c "PASSED" /tmp/checkov-output.txt || echo "0")
-            FAILED=$(grep -c "FAILED" /tmp/checkov-output.txt || echo "0")
-            
-            echo "📊 Checkov Results:"
-            echo "   ✅ Passed: $PASSED"
-            echo "   ❌ Failed: $FAILED"
-            
-            if [ "$FAILED" -gt "0" ]; then
-                echo "⚠️ $FAILED IaC issues détectés - voir rapport ci-dessus"
-            else
-                echo "✅ Checkov scan terminé sans problèmes critiques"
-            fi
-        '''
+            steps {
+                sh '''
+                    echo "🔍 Lancement Checkov IaC Scan..."
+
+                    docker run --rm \
+                      -v ${JENKINS_WS}/kubernetes:/work \
+                      bridgecrew/checkov:latest \
+                      -d /work \
+                      --framework kubernetes \
+                      --soft-fail \
+                      --output cli \
+                      --compact > /tmp/checkov-output.txt 2>&1 || true
+
+                    cat /tmp/checkov-output.txt
+
+                    PASSED=$(grep -c "PASSED" /tmp/checkov-output.txt || echo "0")
+                    FAILED=$(grep -c "FAILED" /tmp/checkov-output.txt || echo "0")
+
+                    echo "📊 Checkov Results:"
+                    echo "   ✅ Passed: $PASSED"
+                    echo "   ❌ Failed: $FAILED"
+
+                    if [ "$FAILED" -gt "0" ]; then
+                        echo "⚠️ $FAILED IaC issues détectés - voir rapport ci-dessus"
+                    else
+                        echo "✅ Checkov scan terminé sans problèmes critiques"
+                    fi
+                '''
+            }
+        }
+
     }
-}
 
     post {
         success { echo '✅ Pipeline DevSecOps réussi !' }
