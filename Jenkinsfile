@@ -191,17 +191,17 @@ pipeline {
         }
 
         stage('SonarQube Quality Gate') {
-            steps {
-                script {
-                    def qg = waitForQualityGate()
-                    if (qg.status != 'OK') {
-                        echo "⚠️ Quality Gate status: ${qg.status} - Pipeline continue"
-                    } else {
-                        echo "✅ Quality Gate passed: ${qg.status}"
-                    }
-                }
+    steps {
+        script {
+            echo "⏳ Attente webhook SonarQube..."
+            def qg = waitForQualityGate(webhookSecretKey: 'sonar-webhook-secret-2024')
+            if (qg.status != 'OK') {
+                error "❌ Quality Gate FAILED: ${qg.status}"
             }
+            echo "✅ Quality Gate PASSED"
         }
+    }
+}
 
         stage('OWASP Dependency Check') {
             steps {
