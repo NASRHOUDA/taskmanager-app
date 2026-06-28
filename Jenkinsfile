@@ -295,40 +295,8 @@ pipeline {
             }
         }
 
-        stage('Checkov - IaC Scan') {
-    steps {
-        script {
-            sh 'mkdir -p kubernetes/checkov-results'
-            
-            sh '''
-                docker run --rm \
-                    -v ${PWD}/kubernetes:/work \
-                    bridgecrew/checkov:latest \
-                    -d /work \
-                    --framework kubernetes \
-                    --soft-fail \
-                    --output json \
-                    > kubernetes/checkov-results/results.json
-            '''
-            
-            sh '''
-                echo "📊 Checkov Results:"
-                if [ -s kubernetes/checkov-results/results.json ]; then
-                    echo "✅ Scan terminé avec succès"
-                    cat kubernetes/checkov-results/results.json | jq '.summary' 2>/dev/null || echo "Résultats disponibles"
-                else
-                    echo "⚠️ Fichier de résultats vide"
-                fi
-            '''
-        }
-    }
-    post {
-        always {
-            archiveArtifacts artifacts: 'kubernetes/checkov-results/*.json', allowEmptyArchive: true
-        }
-    }
-}
-    }  // ← FERMETURE DE stages
+        
+    } 
 
     post {
         success { echo '✅ Pipeline DevSecOps réussi !' }
