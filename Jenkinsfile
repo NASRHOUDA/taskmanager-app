@@ -2,11 +2,13 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE_BACKEND  = 'houdanasr/taskmanager-backend'
-        DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
-        VAULT_ADDR            = 'http://host.docker.internal:8200'
-        VAULT_TOKEN           = 'root'
-    }
+    DOCKER_IMAGE_BACKEND  = 'houdanasr/taskmanager-backend'
+    DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
+    VAULT_ADDR            = 'http://host.docker.internal:8200'
+    VAULT_TOKEN           = 'root'
+    JENKINS_WS            = '/var/jenkins_home/workspace/taskmanager-pipeline'
+    GH_USER               = 'NASRHOUDA'
+}
 
     options {
         timeout(time: 60, unit: 'MINUTES')
@@ -129,19 +131,19 @@ pipeline {
         }
 
         stage('SAST - Semgrep') {
-            steps {
-                dir('backend') {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/src \
-                          returntocorp/semgrep:latest \
-                          semgrep --config=p/security-audit /src --no-git-ignore \
-                          --json --output=/src/semgrep-report.json \
-                        || echo "⚠️ Semgrep scan terminé"
-                    '''
-                }
-            }
-        }
+    steps {
+        sh '''
+            docker run --rm \
+              --volumes-from jenkins \
+              returntocorp/semgrep:latest \
+              semgrep --config=p/security-audit \
+              /var/jenkins_home/workspace/taskmanager-pipeline/backend \
+              --no-git-ignore \
+              --json --output=/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json \
+            || echo "⚠️ Semgrep scan terminé"
+        '''
+    }
+}
 
         stage('SonarQube Analysis') {
             steps {
@@ -247,10 +249,7 @@ pipeline {
 
         stage('Update Manifests') {
             steps {
-                script {
-                    env.GH_USER = 'NASRHOUDA'
-                }
-
+                
                 sh '''
                     set +x
                     set -e
