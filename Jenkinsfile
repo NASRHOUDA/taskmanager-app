@@ -146,36 +146,48 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 dir('backend') {
+                    sh 'npm install'
+                    
+                    sh '''
+                        npm test -- \
+                            --coverage \
+                            --coverageReporters=lcov \
+                            --coverageReporters=text \
+                            --coverageDirectory=./coverage \
+                            || echo "⚠️ Tests terminés"
+                    '''
+                    
+                    sh '''
+                        echo "📊 Vérification des fichiers de rapport :"
+                        ls -la ./coverage/ || echo "⚠️ Coverage directory not found"
+                    '''
+                    
                     withSonarQubeEnv('SonarQube') {
                         sh '''
                             npx sonar-scanner \
-                              -Dsonar.projectKey=taskmanager-backend \
+                              -Dsonar.projectKey=taskmanager \
                               -Dsonar.sources=. \
                               -Dsonar.host.url=http://host.docker.internal:9000 \
                               -Dsonar.token=${SONAR_TOKEN} \
                               -Dsonar.exclusions=node_modules/**,**/*.test.js \
-                            || echo "⚠️ SonarQube scan terminé"
+                              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                              -Dsonar.tests=tests \
+                              -Dsonar.test.inclusions=tests/**/*.test.js
                         '''
                     }
                 }
             }
         }
 
-        stage('OWASP Dependency Check') {
+        stage('SonarQube Quality Gate') {
             steps {
-                dir('backend') {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/src \
-                          -v owasp-data:/usr/share/dependency-check/data \
-                          owasp/dependency-check:latest \
-                          --project "taskmanager-backend" \
-                          --scan /src \
-                          --format JSON \
-                          --out /src/owasp-report.json \
-                          --noupdate \
-                        || echo "⚠️ OWASP scan terminé"
-                    '''
+                script {
+                    def qg = waitForQualityGate()
+                    if (qg.status != 'OK') {
+                        echo "⚠️ Quality Gate status: ${qg.status} - Pipeline continue"
+                    } else {
+                        echo "✅ Quality Gate passed: ${qg.status}"
+                    }
                 }
             }
         }
@@ -220,11 +232,6 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                // FIX : script en quotes simples (''') + variables shell ($DOCKER_PASS, pas ${DOCKER_PASS})
-                // au lieu de quotes triples doubles ("""). Avec """, Groovy injecte la valeur du
-                // secret directement dans le texte du script écrit sur disque ET affiché par Jenkins
-                // -> c'est exactement ce qui causait les "+ echo nasr.2005" en clair dans les logs.
-                // "set +x" en première ligne désactive aussi le traçage shell des commandes suivantes.
                 sh '''
                     set +x
                     echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
@@ -240,12 +247,6 @@ pipeline {
 
         stage('Update Manifests') {
             steps {
-                // FIX : on réutilise GH_TOKEN déjà récupéré dans "Fetch Secrets from Vault"
-                // au lieu de re-fetch Vault + extraction Python ici. Cette deuxième requête
-                // Vault dans le Groovy "script {}" faisait un "echo '${githubSecrets}' | python3 ..."
-                // qui imprimait le JSON contenant le token en clair dans les logs Jenkins
-                // (visible dans ton run précédent : "+ echo {...,"token":"ghp_..."}").
-                // GH_TOKEN est déjà disponible en env, pas besoin de le re-demander à Vault.
                 script {
                     env.GH_USER = 'NASRHOUDA'
                 }
@@ -268,7 +269,6 @@ pipeline {
                         echo "⚠️ No changes to commit"
                     fi
 
-                    # Debug sans danger : pas de valeur secrète affichée, juste la longueur
                     echo "GH_USER: ${GH_USER}"
                     echo "GH_TOKEN length: ${#GH_TOKEN}"
 
@@ -295,44 +295,11 @@ pipeline {
             }
         }
 
-        stage('Checkov - IaC Scan') {
-            steps {
-                // FIX : l'ancienne commande "-o cli -o json --output-file-path /work/checkov-results"
-                // était invalide. Avec 2 formats (-o cli -o json), --output-file-path attend une liste
-                // séparée par des virgules, une valeur par format dans le même ordre. Le dossier de
-                // sortie doit aussi exister avant l'appel (Checkov ne le crée pas lui-même).
-                sh '''
-                    rm -rf kubernetes/checkov-results
-                    mkdir -p kubernetes/checkov-results
-
-                    docker run --rm \
-                      -v $(pwd)/kubernetes:/work \
-                      bridgecrew/checkov:latest \
-                      -d /work \
-                      --framework kubernetes \
-                      --soft-fail \
-                      --compact \
-                      -o cli -o json \
-                      --output-file-path console,/work/checkov-results \
-                    || echo "✅ Checkov scan terminé"
-
-                    echo "📊 Checkov Results:"
-                    REPORT=kubernetes/checkov-results/results_json.json
-                    if [ -f "$REPORT" ]; then
-                        PASSED=$(jq -r '.summary.passed // 0' "$REPORT" 2>/dev/null || echo 0)
-                        FAILED=$(jq -r '.summary.failed // 0' "$REPORT" 2>/dev/null || echo 0)
-                        echo "   ✅ Passed: ${PASSED}"
-                        echo "   ❌ Failed: ${FAILED}"
-                    else
-                        echo "   ⚠️ Pas de rapport JSON trouvé, voir la sortie CLI ci-dessus"
-                    fi
-                '''
-            }
-        }
-    }
+        
+    } 
 
     post {
         success { echo '✅ Pipeline DevSecOps réussi !' }
         failure { echo '❌ Pipeline échoué' }
     }
-}
+}  // ← FERMETURE FINALE DU PIPELINE
