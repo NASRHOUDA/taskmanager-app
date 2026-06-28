@@ -81,7 +81,7 @@ pipeline {
             parallel {
                 stage('Backend Install') {
                     steps {
-                        dir('backend') { sh 'npm ci' }
+                        dir('backend') { sh 'npm install' }
                     }
                 }
                 stage('Frontend Install') {
