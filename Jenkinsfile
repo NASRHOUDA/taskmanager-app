@@ -5,7 +5,7 @@ pipeline {
         DOCKER_IMAGE_BACKEND  = 'houdanasr/taskmanager-backend'
         DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
         VAULT_ADDR            = 'http://host.docker.internal:8200'
-        VAULT_TOKEN           = credentials('vault-token') // ne JAMAIS hardcoder 'root' ici
+        VAULT_TOKEN           = 'root'
     }
 
     options {
