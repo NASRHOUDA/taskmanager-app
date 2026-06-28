@@ -6,6 +6,7 @@ pipeline {
         DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
         VAULT_ADDR            = 'http://host.docker.internal:8200'
         VAULT_TOKEN           = 'root'
+        JENKINS_WS = '/var/jenkins_home/workspace/taskmanager-pipeline'
     }
 
     options {
@@ -19,6 +20,20 @@ pipeline {
             steps {
                 checkout scm
                 echo '📦 Code récupéré depuis GitHub'
+            }
+        }
+
+        stage('Gitleaks - Secret Scan') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v ${JENKINS_WS}:/path \
+                      zricethezav/gitleaks:latest \
+                      detect --source=/path \
+                      --no-git \
+                      --exit-code=0 \
+                    || echo "⚠️ Gitleaks scan terminé"
+                '''
             }
         }
 
@@ -37,6 +52,7 @@ pipeline {
                           ${VAULT_ADDR}/v1/secret/data/taskmanager/github
                     """, returnStdout: true).trim()
                     env.GH_TOKEN = sh(script: "echo '${githubSecrets}' | jq -r '.data.data.token'", returnStdout: true).trim()
+                    env.GH_USER  = 'NASRHOUDA'
 
                     def sonarSecrets = sh(script: """
                         curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
@@ -130,16 +146,27 @@ pipeline {
 
         stage('SAST - Semgrep') {
             steps {
-                dir('backend') {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/src \
-                          returntocorp/semgrep:latest \
-                          semgrep --config=p/security-audit /src --no-git-ignore \
-                          --json --output=/src/semgrep-report.json \
-                        || echo "⚠️ Semgrep scan terminé"
-                    '''
-                }
+                sh '''
+                    docker run --rm \
+                      --volumes-from jenkins \
+                      returntocorp/semgrep:latest \
+                      semgrep --config=p/nodejs --config=p/security-audit /var/jenkins_home/workspace/taskmanager-pipeline/backend \
+                      --include='**/*.js' \
+                      --exclude='node_modules' \
+                      --json --output=/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json
+
+                    REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json"
+                    if [ -f "$REPORT_PATH" ]; then
+                        echo "✅ Semgrep scan complété"
+                        if command -v jq >/dev/null 2>&1; then
+                            FINDINGS=$(jq '.results | length' "$REPORT_PATH" 2>/dev/null || echo "0")
+                            echo "📊 Findings détectés: $FINDINGS"
+                        fi
+                    else
+                        echo "⚠️ Rapport Semgrep non généré"
+                        exit 1
+                    fi
+                '''
             }
         }
 
@@ -149,37 +176,69 @@ pipeline {
                     withSonarQubeEnv('SonarQube') {
                         sh '''
                             npx sonar-scanner \
-                              -Dsonar.projectKey=taskmanager-backend \
+                              -Dsonar.projectKey=taskmanager \
                               -Dsonar.sources=. \
                               -Dsonar.host.url=http://host.docker.internal:9000 \
                               -Dsonar.token=${SONAR_TOKEN} \
                               -Dsonar.exclusions=node_modules/**,**/*.test.js \
-                            || echo "⚠️ SonarQube scan terminé"
+                              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                              -Dsonar.tests=tests \
+                              -Dsonar.test.inclusions=tests/**/*.test.js
                         '''
                     }
                 }
             }
         }
 
-        stage('OWASP Dependency Check') {
-            steps {
-                dir('backend') {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/src \
-                          -v owasp-data:/usr/share/dependency-check/data \
-                          owasp/dependency-check:latest \
-                          --project "taskmanager-backend" \
-                          --scan /src \
-                          --format JSON \
-                          --out /src/owasp-report.json \
-                          --noupdate \
-                        || echo "⚠️ OWASP scan terminé"
-                    '''
-                }
+        stage('SonarQube Quality Gate') {
+    steps {
+        script {
+            echo "⏳ Attente Quality Gate..."
+            def qg = waitForQualityGate()  // ← Sans paramètres
+            if (qg.status != 'OK') {
+                error "❌ Quality Gate FAILED: ${qg.status}"
             }
+            echo "✅ Quality Gate PASSED"
         }
+    }
+}
 
+        stage('OWASP Dependency Check') {
+    steps {
+        sh '''
+            mkdir -p /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
+            chmod 777 /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
+
+            echo "🔍 Lancement OWASP Dependency Check..."
+            docker run --rm --user root \
+              -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src:ro \
+              -v /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output:/report:rw \
+              -v owasp-cache:/usr/share/dependency-check/data:ro \
+              owasp/dependency-check:latest \
+              --project taskmanager-backend \
+              --scan /src \
+              --format JSON \
+              --format HTML \
+              --out /report \
+              --noupdate \
+              --disableAssembly \
+              --disableRetireJS \
+              --disableNodeAudit \
+              --enableExperimental || true
+
+            if [ -f /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json ]; then
+                echo "✅ OWASP Rapport généré avec succès"
+                CRITICAL=$(grep -c '"severity":"CRITICAL"' /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json || echo "0")
+                HIGH=$(grep -c '"severity":"HIGH"' /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json || echo "0")
+                echo "   🔴 CRITICAL: $CRITICAL"
+                echo "   🟠 HIGH: $HIGH"
+            else
+                echo "⚠️ Rapport non généré"
+                ls -la /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/
+            fi
+        '''
+    }
+}
         stage('Build Docker Images') {
             steps {
                 sh """
@@ -203,6 +262,7 @@ pipeline {
                 sh """
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v trivy-cache:/root/.cache/trivy \
                       aquasec/trivy:latest image \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
@@ -210,6 +270,7 @@ pipeline {
 
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v trivy-cache:/root/.cache/trivy \
                       aquasec/trivy:latest image \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
@@ -234,15 +295,24 @@ pipeline {
 
         stage('Update Manifests') {
             steps {
-                sh """
+                sh '''
+                    set -e
                     git config user.email jenkins@taskmanager.com
                     git config user.name "Jenkins CI"
+                    export GIT_TERMINAL_PROMPT=0
+
                     sed -i "s|image: houdanasr/taskmanager-backend:.*|image: houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
                     sed -i "s|image: houdanasr/taskmanager-frontend:.*|image: houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
+
                     git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
-                    git commit -m "ci: update image tags to build #${BUILD_NUMBER}" || echo "Nothing to commit"
-                    git push https://${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main || echo "⚠️ Git push terminé"
-                """
+
+                    if ! git commit -m "ci: update image tags to build #${BUILD_NUMBER}"; then
+                        echo "⚠️ No changes to commit"
+                    fi
+
+                    git push https://${GH_USER}:${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
+                    echo "✅ Manifests pushed successfully to GitHub"
+                '''
             }
         }
 
@@ -257,6 +327,8 @@ pipeline {
                     flux get kustomizations
                     echo "📊 Pods:"
                     kubectl get pods -n taskmanager || true
+                    kubectl rollout status deployment/backend -n taskmanager --timeout=2m || true
+                    kubectl rollout status deployment/frontend -n taskmanager --timeout=2m || true
                     echo "✅ Déploiement Flux CD complété"
                 '''
             }
@@ -265,16 +337,35 @@ pipeline {
         stage('Checkov - IaC Scan') {
             steps {
                 sh '''
-                    docker run --rm \
-                      -v $(pwd)/kubernetes:/work \
-                      bridgecrew/checkov:latest \
-                      -d /work \
-                      --framework kubernetes \
-                      --soft-fail \
-                    || echo "✅ Checkov scan terminé"
+                    echo "🔍 Lancement Checkov IaC Scan..."
+
+                   docker run --rm \
+  -v ${JENKINS_WS}/kubernetes:/work \
+  bridgecrew/checkov:latest \
+  -d /work \
+  --framework kubernetes \
+  --soft-fail \
+  --output cli \
+  --compact 2>&1 | tee /tmp/checkov-output.txt || truee
+
+                    cat /tmp/checkov-output.txt
+
+                    PASSED=$(grep -c "PASSED" /tmp/checkov-output.txt || echo "0")
+                    FAILED=$(grep -c "FAILED" /tmp/checkov-output.txt || echo "0")
+
+                    echo "📊 Checkov Results:"
+                    echo "   ✅ Passed: $PASSED"
+                    echo "   ❌ Failed: $FAILED"
+
+                    if [ "$FAILED" -gt "0" ]; then
+                        echo "⚠️ $FAILED IaC issues détectés - voir rapport ci-dessus"
+                    else
+                        echo "✅ Checkov scan terminé sans problèmes critiques"
+                    fi
                 '''
             }
         }
+
     }
 
     post {
