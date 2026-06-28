@@ -296,49 +296,38 @@ pipeline {
         }
 
         stage('Checkov - IaC Scan') {
-            steps {
-                script {
-                    sh '''
-                        rm -rf kubernetes/checkov-results
-                        mkdir -p kubernetes/checkov-results
-                    '''
-                    
-                    sh '''
-                        docker run --rm \
-                            -v ${PWD}/kubernetes:/work \
-                            bridgecrew/checkov:latest \
-                            -d /work \
-                            --framework kubernetes \
-                            --soft-fail \
-                            --output cli \
-                            --output json \
-                            --output-file-path /work/checkov-results/results.json
-                    '''
-                    
-                    sh '''
-                        echo "📊 Checkov Results:"
-                        if [ -f kubernetes/checkov-results/results.json ]; then
-                            echo "✅ Rapport JSON généré avec succès"
-                            cat kubernetes/checkov-results/results.json | jq '.' 2>/dev/null || cat kubernetes/checkov-results/results.json
-                        else
-                            echo "⚠️ Le rapport JSON n'a pas été généré"
-                            ls -la kubernetes/checkov-results/ || echo "Répertoire vide"
-                        fi
-                    '''
-                }
-            }
-            post {
-                always {
-                    script {
-                        try {
-                            archiveArtifacts artifacts: 'kubernetes/checkov-results/**/*', fingerprint: true, allowEmptyArchive: true
-                        } catch (Exception e) {
-                            echo "⚠️ Impossible d'archiver les artefacts : ${e.message}"
-                        }
-                    }
-                }
-            }
+    steps {
+        script {
+            sh 'mkdir -p kubernetes/checkov-results'
+            
+            sh '''
+                docker run --rm \
+                    -v ${PWD}/kubernetes:/work \
+                    bridgecrew/checkov:latest \
+                    -d /work \
+                    --framework kubernetes \
+                    --soft-fail \
+                    --output json \
+                    > kubernetes/checkov-results/results.json
+            '''
+            
+            sh '''
+                echo "📊 Checkov Results:"
+                if [ -s kubernetes/checkov-results/results.json ]; then
+                    echo "✅ Scan terminé avec succès"
+                    cat kubernetes/checkov-results/results.json | jq '.summary' 2>/dev/null || echo "Résultats disponibles"
+                else
+                    echo "⚠️ Fichier de résultats vide"
+                fi
+            '''
         }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: 'kubernetes/checkov-results/*.json', allowEmptyArchive: true
+        }
+    }
+}
     }  // ← FERMETURE DE stages
 
     post {
