@@ -216,7 +216,7 @@ pipeline {
               -v owasp-cache:/usr/share/dependency-check/data:ro \
               owasp/dependency-check:latest \
               --project taskmanager-backend \
-              --scan /src/package.json \
+              --scan /src \
               --format JSON \
               --format HTML \
               --out /report \
@@ -339,14 +339,14 @@ pipeline {
                 sh '''
                     echo "🔍 Lancement Checkov IaC Scan..."
 
-                    docker run --rm \
-                      -v ${JENKINS_WS}/kubernetes:/work \
-                      bridgecrew/checkov:latest \
-                      -d /work \
-                      --framework kubernetes \
-                      --soft-fail \
-                      --output cli \
-                      --compact > /tmp/checkov-output.txt 2>&1 || true
+                   docker run --rm \
+  -v ${JENKINS_WS}/kubernetes:/work \
+  bridgecrew/checkov:latest \
+  -d /work \
+  --framework kubernetes \
+  --soft-fail \
+  --output cli \
+  --compact 2>&1 | tee /tmp/checkov-output.txt || truee
 
                     cat /tmp/checkov-output.txt
 
