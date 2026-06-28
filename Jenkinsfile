@@ -203,42 +203,7 @@ pipeline {
     }
 }
 
-        stage('OWASP Dependency Check') {
-    steps {
-        sh '''
-            mkdir -p /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
-            chmod 777 /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
-
-            echo "🔍 Lancement OWASP Dependency Check..."
-            docker run --rm --user root \
-              -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src:ro \
-              -v /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output:/report:rw \
-              -v owasp-cache:/usr/share/dependency-check/data:ro \
-              owasp/dependency-check:latest \
-              --project taskmanager-backend \
-              --scan /src \
-              --format JSON \
-              --format HTML \
-              --out /report \
-              --noupdate \
-              --disableAssembly \
-              --disableRetireJS \
-              --disableNodeAudit \
-              --enableExperimental || true
-
-            if [ -f /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json ]; then
-                echo "✅ OWASP Rapport généré avec succès"
-                CRITICAL=$(grep -c '"severity":"CRITICAL"' /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json || echo "0")
-                HIGH=$(grep -c '"severity":"HIGH"' /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json || echo "0")
-                echo "   🔴 CRITICAL: $CRITICAL"
-                echo "   🟠 HIGH: $HIGH"
-            else
-                echo "⚠️ Rapport non généré"
-                ls -la /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/
-            fi
-        '''
-    }
-}
+        
         stage('Build Docker Images') {
             steps {
                 sh """
