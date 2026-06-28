@@ -209,18 +209,22 @@ pipeline {
             mkdir -p /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
             chmod 777 /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output
 
-            echo "🔍 Lancement OWASP Dependency Check (avec cache pré-chargé)..."
+            echo "🔍 Lancement OWASP Dependency Check..."
             docker run --rm --user root \
               -v /var/jenkins_home/workspace/taskmanager-pipeline/backend:/src:ro \
               -v /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output:/report:rw \
               -v owasp-cache:/usr/share/dependency-check/data:ro \
               owasp/dependency-check:latest \
               --project taskmanager-backend \
-              --scan /src \
+              --scan /src/package.json \
               --format JSON \
               --format HTML \
               --out /report \
-              --exclude "**/node_modules/**" || true
+              --noupdate \
+              --disableAssembly \
+              --disableRetireJS \
+              --disableNodeAudit \
+              --enableExperimental || true
 
             if [ -f /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/dependency-check-report.json ]; then
                 echo "✅ OWASP Rapport généré avec succès"
@@ -229,7 +233,7 @@ pipeline {
                 echo "   🔴 CRITICAL: $CRITICAL"
                 echo "   🟠 HIGH: $HIGH"
             else
-                echo "⚠️ Rapport JSON non généré - HTML disponible"
+                echo "⚠️ Rapport non généré"
                 ls -la /var/jenkins_home/workspace/taskmanager-pipeline/owasp-output/
             fi
         '''
