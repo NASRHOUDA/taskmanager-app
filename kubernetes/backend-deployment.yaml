@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: houdanasr/taskmanager-backend:63
+        image: houdanasr/taskmanager-backend:64
         imagePullPolicy: Always
         ports:
         - containerPort: 5000
