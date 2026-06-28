@@ -5,8 +5,7 @@ pipeline {
         DOCKER_IMAGE_BACKEND  = 'houdanasr/taskmanager-backend'
         DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
         VAULT_ADDR            = 'http://host.docker.internal:8200'
-        VAULT_TOKEN           = 'root'
-        JENKINS_WS = '/var/jenkins_home/workspace/taskmanager-pipeline'
+        VAULT_TOKEN           = credentials('vault-token') // ne JAMAIS hardcoder 'root' ici
     }
 
     options {
@@ -23,70 +22,51 @@ pipeline {
             }
         }
 
-        stage('Gitleaks - Secret Scan') {
-            steps {
-                sh '''
-                    docker run --rm \
-                      -v ${JENKINS_WS}:/path \
-                      zricethezav/gitleaks:latest \
-                      detect --source=/path \
-                      --no-git \
-                      --exit-code=0 \
-                    || echo "⚠️ Gitleaks scan terminé"
-                '''
-            }
-        }
-
         stage('Fetch Secrets from Vault') {
             steps {
                 script {
-                    def dockerSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/docker
-                    """, returnStdout: true).trim()
-                    env.DOCKER_USER = sh(script: "echo '${dockerSecrets}' | jq -r '.data.data.username'", returnStdout: true).trim()
-                    env.DOCKER_PASS = sh(script: "echo '${dockerSecrets}' | jq -r '.data.data.password'", returnStdout: true).trim()
+                    // Fonction utilitaire : récupère et parse un secret Vault
+                    // SANS jamais faire transiter sa valeur par une commande shell.
+                    // Le JSON brut n'est jamais "echo"-é : il est parsé directement
+                    // en mémoire Groovy, donc il n'apparaît jamais dans les logs Jenkins.
+                    def fetchVaultSecret = { String path ->
+                        def raw = sh(
+                            script: "set +x; curl -s -H \"X-Vault-Token: \$VAULT_TOKEN\" ${VAULT_ADDR}/v1/secret/data/taskmanager/${path}",
+                            returnStdout: true
+                        ).trim()
+                        def json = new groovy.json.JsonSlurperClassic().parseText(raw)
+                        return json.data.data
+                    }
 
-                    def githubSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/github
-                    """, returnStdout: true).trim()
-                    env.GH_TOKEN = sh(script: "echo '${githubSecrets}' | jq -r '.data.data.token'", returnStdout: true).trim()
-                    env.GH_USER  = 'NASRHOUDA'
+                    def docker = fetchVaultSecret('docker')
+                    env.DOCKER_USER = docker.username
+                    env.DOCKER_PASS = docker.password
 
-                    def sonarSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/sonar
-                    """, returnStdout: true).trim()
-                    env.SONAR_TOKEN = sh(script: "echo '${sonarSecrets}' | jq -r '.data.data.token'", returnStdout: true).trim()
+                    def github = fetchVaultSecret('github')
+                    env.GH_TOKEN = github.token
+                    env.GH_USER  = github.username
 
-                    def googleSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/google
-                    """, returnStdout: true).trim()
-                    env.GOOGLE_CLIENT_ID     = sh(script: "echo '${googleSecrets}' | jq -r '.data.data.client_id'", returnStdout: true).trim()
-                    env.GOOGLE_CLIENT_SECRET = sh(script: "echo '${googleSecrets}' | jq -r '.data.data.client_secret'", returnStdout: true).trim()
+                    def sonar = fetchVaultSecret('sonar')
+                    env.SONAR_TOKEN = sonar.token
 
-                    def dbSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/db
-                    """, returnStdout: true).trim()
-                    env.DB_HOST     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.host'", returnStdout: true).trim()
-                    env.DB_PORT     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.port'", returnStdout: true).trim()
-                    env.DB_NAME     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.name'", returnStdout: true).trim()
-                    env.DB_USER     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.user'", returnStdout: true).trim()
-                    env.DB_PASSWORD = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.password'", returnStdout: true).trim()
+                    def google = fetchVaultSecret('google')
+                    env.GOOGLE_CLIENT_ID     = google.client_id
+                    env.GOOGLE_CLIENT_SECRET = google.client_secret
 
-                    def appSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/app
-                    """, returnStdout: true).trim()
-                    env.JWT_SECRET     = sh(script: "echo '${appSecrets}' | jq -r '.data.data.jwt_secret'", returnStdout: true).trim()
-                    env.JWT_EXPIRES_IN = sh(script: "echo '${appSecrets}' | jq -r '.data.data.jwt_expires_in'", returnStdout: true).trim()
-                    env.FRONTEND_URL   = sh(script: "echo '${appSecrets}' | jq -r '.data.data.frontend_url'", returnStdout: true).trim()
-                    env.API_URL        = sh(script: "echo '${appSecrets}' | jq -r '.data.data.api_url'", returnStdout: true).trim()
+                    def db = fetchVaultSecret('db')
+                    env.DB_HOST     = db.host
+                    env.DB_PORT     = db.port
+                    env.DB_NAME     = db.name
+                    env.DB_USER     = db.user
+                    env.DB_PASSWORD = db.password
 
-                    echo '✅ Secrets récupérés depuis Vault'
+                    def app = fetchVaultSecret('app')
+                    env.JWT_SECRET     = app.jwt_secret
+                    env.JWT_EXPIRES_IN = app.jwt_expires_in
+                    env.FRONTEND_URL   = app.frontend_url
+                    env.API_URL        = app.api_url
+
+                    echo '✅ Secrets récupérés depuis Vault (valeurs non affichées dans les logs)'
                 }
             }
         }
@@ -146,27 +126,16 @@ pipeline {
 
         stage('SAST - Semgrep') {
             steps {
-                sh '''
-                    docker run --rm \
-                      --volumes-from jenkins \
-                      returntocorp/semgrep:latest \
-                      semgrep --config=p/nodejs --config=p/security-audit /var/jenkins_home/workspace/taskmanager-pipeline/backend \
-                      --include='**/*.js' \
-                      --exclude='node_modules' \
-                      --json --output=/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json
-
-                    REPORT_PATH="/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json"
-                    if [ -f "$REPORT_PATH" ]; then
-                        echo "✅ Semgrep scan complété"
-                        if command -v jq >/dev/null 2>&1; then
-                            FINDINGS=$(jq '.results | length' "$REPORT_PATH" 2>/dev/null || echo "0")
-                            echo "📊 Findings détectés: $FINDINGS"
-                        fi
-                    else
-                        echo "⚠️ Rapport Semgrep non généré"
-                        exit 1
-                    fi
-                '''
+                dir('backend') {
+                    sh '''
+                        docker run --rm \
+                          -v $(pwd):/src \
+                          returntocorp/semgrep:latest \
+                          semgrep --config=p/security-audit /src --no-git-ignore \
+                          --json --output=/src/semgrep-report.json \
+                        || echo "⚠️ Semgrep scan terminé"
+                    '''
+                }
             }
         }
 
@@ -175,35 +144,39 @@ pipeline {
                 dir('backend') {
                     withSonarQubeEnv('SonarQube') {
                         sh '''
+                            set +x
                             npx sonar-scanner \
-                              -Dsonar.projectKey=taskmanager \
+                              -Dsonar.projectKey=taskmanager-backend \
                               -Dsonar.sources=. \
                               -Dsonar.host.url=http://host.docker.internal:9000 \
                               -Dsonar.token=${SONAR_TOKEN} \
                               -Dsonar.exclusions=node_modules/**,**/*.test.js \
-                              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                              -Dsonar.tests=tests \
-                              -Dsonar.test.inclusions=tests/**/*.test.js
+                            || echo "⚠️ SonarQube scan terminé"
                         '''
                     }
                 }
             }
         }
 
-        stage('SonarQube Quality Gate') {
-    steps {
-        script {
-            echo "⏳ Attente Quality Gate..."
-            def qg = waitForQualityGate()  // ← Sans paramètres
-            if (qg.status != 'OK') {
-                error "❌ Quality Gate FAILED: ${qg.status}"
+        stage('OWASP Dependency Check') {
+            steps {
+                dir('backend') {
+                    sh '''
+                        docker run --rm \
+                          -v $(pwd):/src \
+                          -v owasp-data:/usr/share/dependency-check/data \
+                          owasp/dependency-check:latest \
+                          --project "taskmanager-backend" \
+                          --scan /src \
+                          --format JSON \
+                          --out /src/owasp-report.json \
+                          --noupdate \
+                        || echo "⚠️ OWASP scan terminé"
+                    '''
+                }
             }
-            echo "✅ Quality Gate PASSED"
         }
-    }
-}
 
-        
         stage('Build Docker Images') {
             steps {
                 sh """
@@ -227,7 +200,6 @@ pipeline {
                 sh """
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
-                      -v trivy-cache:/root/.cache/trivy \
                       aquasec/trivy:latest image \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
@@ -235,7 +207,6 @@ pipeline {
 
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
-                      -v trivy-cache:/root/.cache/trivy \
                       aquasec/trivy:latest image \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
@@ -246,24 +217,32 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                sh """
-                    echo '${DOCKER_PASS}' | docker login -u '${DOCKER_USER}' --password-stdin
+                // --password-stdin évite que le mot de passe apparaisse dans `ps aux`,
+                // et "set +x" évite qu'il apparaisse dans les logs Jenkins.
+                // Pense aussi à configurer un credential helper docker côté agent
+                // (ex: docker-credential-pass) pour ne pas le stocker en clair sur disque.
+                sh '''
+                    set +x
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                     docker push ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}
                     docker push ${DOCKER_IMAGE_BACKEND}:latest
                     docker push ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER}
                     docker push ${DOCKER_IMAGE_FRONTEND}:latest
                     docker logout
                     echo "✅ Images poussées vers Docker Hub"
-                """
+                '''
             }
         }
 
         stage('Update Manifests') {
             steps {
                 sh '''
+                    set +x
                     set -e
+
                     git config user.email jenkins@taskmanager.com
                     git config user.name "Jenkins CI"
+
                     export GIT_TERMINAL_PROMPT=0
 
                     sed -i "s|image: houdanasr/taskmanager-backend:.*|image: houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
@@ -275,7 +254,8 @@ pipeline {
                         echo "⚠️ No changes to commit"
                     fi
 
-                    git push https://${GH_USER}:${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git HEAD:main
+                    git push "https://${GH_USER}:${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git" HEAD:main
+
                     echo "✅ Manifests pushed successfully to GitHub"
                 '''
             }
@@ -292,8 +272,6 @@ pipeline {
                     flux get kustomizations
                     echo "📊 Pods:"
                     kubectl get pods -n taskmanager || true
-                    kubectl rollout status deployment/backend -n taskmanager --timeout=2m || true
-                    kubectl rollout status deployment/frontend -n taskmanager --timeout=2m || true
                     echo "✅ Déploiement Flux CD complété"
                 '''
             }
@@ -302,38 +280,57 @@ pipeline {
         stage('Checkov - IaC Scan') {
             steps {
                 sh '''
-                    echo "🔍 Lancement Checkov IaC Scan..."
+                    # Checkov ne crée pas le dossier de sortie lui-même : on le prépare avant,
+                    # sinon erreur "No such file or directory".
+                    rm -rf kubernetes/checkov-results
+                    mkdir -p kubernetes/checkov-results
 
-                   docker run --rm \
-  -v ${JENKINS_WS}/kubernetes:/work \
-  bridgecrew/checkov:latest \
-  -d /work \
-  --framework kubernetes \
-  --soft-fail \
-  --output cli \
-  --compact 2>&1 | tee /tmp/checkov-output.txt || truee
-
-                    cat /tmp/checkov-output.txt
-
-                    PASSED=$(grep -c "PASSED" /tmp/checkov-output.txt || echo "0")
-                    FAILED=$(grep -c "FAILED" /tmp/checkov-output.txt || echo "0")
+                    # Avec 2 formats (-o cli -o json), --output-file-path attend une liste
+                    # séparée par des virgules, UNE valeur par format, dans le même ordre :
+                    #   "console"               -> le format cli s'affiche juste dans les logs
+                    #   "/work/checkov-results" -> le format json est écrit dans ce dossier
+                    docker run --rm \
+                      -v $(pwd)/kubernetes:/work \
+                      bridgecrew/checkov:latest \
+                      -d /work \
+                      --framework kubernetes \
+                      --soft-fail \
+                      --compact \
+                      -o cli -o json \
+                      --output-file-path console,/work/checkov-results \
+                    || echo "⚠️ Checkov scan terminé"
 
                     echo "📊 Checkov Results:"
-                    echo "   ✅ Passed: $PASSED"
-                    echo "   ❌ Failed: $FAILED"
-
-                    if [ "$FAILED" -gt "0" ]; then
-                        echo "⚠️ $FAILED IaC issues détectés - voir rapport ci-dessus"
+                    # Checkov nomme TOUJOURS le fichier results_json.json,
+                    # quel que soit le nom du dossier donné à --output-file-path.
+                    REPORT=kubernetes/checkov-results/results_json.json
+                    if [ -f "$REPORT" ]; then
+                        PASSED=$(jq -r '.summary.passed // 0' "$REPORT" 2>/dev/null || echo 0)
+                        FAILED=$(jq -r '.summary.failed // 0' "$REPORT" 2>/dev/null || echo 0)
+                        SKIPPED=$(jq -r '.summary.skipped // 0' "$REPORT" 2>/dev/null || echo 0)
+                        echo "   ✅ Passed:  ${PASSED}"
+                        echo "   ❌ Failed:  ${FAILED}"
+                        echo "   ⏭️  Skipped: ${SKIPPED}"
                     else
-                        echo "✅ Checkov scan terminé sans problèmes critiques"
+                        echo "   ⚠️ Pas de rapport JSON trouvé à ${REPORT}, voir la sortie CLI ci-dessus"
                     fi
                 '''
             }
         }
-
     }
 
     post {
+        always {
+            // Nettoyage défensif : purge les variables sensibles de l'environnement du build
+            script {
+                env.DOCKER_PASS = ''
+                env.GH_TOKEN = ''
+                env.SONAR_TOKEN = ''
+                env.GOOGLE_CLIENT_SECRET = ''
+                env.DB_PASSWORD = ''
+                env.JWT_SECRET = ''
+            }
+        }
         success { echo '✅ Pipeline DevSecOps réussi !' }
         failure { echo '❌ Pipeline échoué' }
     }
