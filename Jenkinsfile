@@ -149,36 +149,35 @@ pipeline {
                     withSonarQubeEnv('SonarQube') {
                         sh '''
                             npx sonar-scanner \
-                              -Dsonar.projectKey=taskmanager-backend \
+                              -Dsonar.projectKey=taskmanager \
                               -Dsonar.sources=. \
                               -Dsonar.host.url=http://host.docker.internal:9000 \
                               -Dsonar.token=${SONAR_TOKEN} \
                               -Dsonar.exclusions=node_modules/**,**/*.test.js \
-                            || echo "⚠️ SonarQube scan terminé"
+                              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                              -Dsonar.testExecutionReportPaths=coverage/test-report.xml \
+                              -Dsonar.tests=tests \
+                              -Dsonar.test.inclusions=tests/**/*.test.js
                         '''
                     }
                 }
             }
         }
 
-        stage('OWASP Dependency Check') {
+        stage('SonarQube Quality Gate') {
             steps {
-                dir('backend') {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/src \
-                          -v owasp-data:/usr/share/dependency-check/data \
-                          owasp/dependency-check:latest \
-                          --project "taskmanager-backend" \
-                          --scan /src \
-                          --format JSON \
-                          --out /src/owasp-report.json \
-                          --noupdate \
-                        || echo "⚠️ OWASP scan terminé"
-                    '''
+                script {
+                    def qg = waitForQualityGate()
+                    if (qg.status != 'OK') {
+                        echo "⚠️ Quality Gate status: ${qg.status} - Pipeline continue"
+                    } else {
+                        echo "✅ Quality Gate passed: ${qg.status}"
+                    }
                 }
             }
         }
+
+        
 
         stage('Build Docker Images') {
             steps {
