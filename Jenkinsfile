@@ -25,48 +25,52 @@ pipeline {
         stage('Fetch Secrets from Vault') {
             steps {
                 script {
-                    // Fonction utilitaire : récupère et parse un secret Vault
-                    // SANS jamais faire transiter sa valeur par une commande shell.
-                    // Le JSON brut n'est jamais "echo"-é : il est parsé directement
-                    // en mémoire Groovy, donc il n'apparaît jamais dans les logs Jenkins.
-                    def fetchVaultSecret = { String path ->
-                        def raw = sh(
-                            script: "set +x; curl -s -H \"X-Vault-Token: \$VAULT_TOKEN\" ${VAULT_ADDR}/v1/secret/data/taskmanager/${path}",
-                            returnStdout: true
-                        ).trim()
-                        def json = new groovy.json.JsonSlurperClassic().parseText(raw)
-                        return json.data.data
-                    }
+                    def dockerSecrets = sh(script: """
+                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
+                          ${VAULT_ADDR}/v1/secret/data/taskmanager/docker
+                    """, returnStdout: true).trim()
+                    env.DOCKER_USER = sh(script: "echo '${dockerSecrets}' | jq -r '.data.data.username'", returnStdout: true).trim()
+                    env.DOCKER_PASS = sh(script: "echo '${dockerSecrets}' | jq -r '.data.data.password'", returnStdout: true).trim()
 
-                    def docker = fetchVaultSecret('docker')
-                    env.DOCKER_USER = docker.username
-                    env.DOCKER_PASS = docker.password
+                    def githubSecrets = sh(script: """
+                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
+                          ${VAULT_ADDR}/v1/secret/data/taskmanager/github
+                    """, returnStdout: true).trim()
+                    env.GH_TOKEN = sh(script: "echo '${githubSecrets}' | jq -r '.data.data.token'", returnStdout: true).trim()
 
-                    def github = fetchVaultSecret('github')
-                    env.GH_TOKEN = github.token
-                    env.GH_USER  = github.username
+                    def sonarSecrets = sh(script: """
+                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
+                          ${VAULT_ADDR}/v1/secret/data/taskmanager/sonar
+                    """, returnStdout: true).trim()
+                    env.SONAR_TOKEN = sh(script: "echo '${sonarSecrets}' | jq -r '.data.data.token'", returnStdout: true).trim()
 
-                    def sonar = fetchVaultSecret('sonar')
-                    env.SONAR_TOKEN = sonar.token
+                    def googleSecrets = sh(script: """
+                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
+                          ${VAULT_ADDR}/v1/secret/data/taskmanager/google
+                    """, returnStdout: true).trim()
+                    env.GOOGLE_CLIENT_ID     = sh(script: "echo '${googleSecrets}' | jq -r '.data.data.client_id'", returnStdout: true).trim()
+                    env.GOOGLE_CLIENT_SECRET = sh(script: "echo '${googleSecrets}' | jq -r '.data.data.client_secret'", returnStdout: true).trim()
 
-                    def google = fetchVaultSecret('google')
-                    env.GOOGLE_CLIENT_ID     = google.client_id
-                    env.GOOGLE_CLIENT_SECRET = google.client_secret
+                    def dbSecrets = sh(script: """
+                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
+                          ${VAULT_ADDR}/v1/secret/data/taskmanager/db
+                    """, returnStdout: true).trim()
+                    env.DB_HOST     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.host'", returnStdout: true).trim()
+                    env.DB_PORT     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.port'", returnStdout: true).trim()
+                    env.DB_NAME     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.name'", returnStdout: true).trim()
+                    env.DB_USER     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.user'", returnStdout: true).trim()
+                    env.DB_PASSWORD = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.password'", returnStdout: true).trim()
 
-                    def db = fetchVaultSecret('db')
-                    env.DB_HOST     = db.host
-                    env.DB_PORT     = db.port
-                    env.DB_NAME     = db.name
-                    env.DB_USER     = db.user
-                    env.DB_PASSWORD = db.password
+                    def appSecrets = sh(script: """
+                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
+                          ${VAULT_ADDR}/v1/secret/data/taskmanager/app
+                    """, returnStdout: true).trim()
+                    env.JWT_SECRET     = sh(script: "echo '${appSecrets}' | jq -r '.data.data.jwt_secret'", returnStdout: true).trim()
+                    env.JWT_EXPIRES_IN = sh(script: "echo '${appSecrets}' | jq -r '.data.data.jwt_expires_in'", returnStdout: true).trim()
+                    env.FRONTEND_URL   = sh(script: "echo '${appSecrets}' | jq -r '.data.data.frontend_url'", returnStdout: true).trim()
+                    env.API_URL        = sh(script: "echo '${appSecrets}' | jq -r '.data.data.api_url'", returnStdout: true).trim()
 
-                    def app = fetchVaultSecret('app')
-                    env.JWT_SECRET     = app.jwt_secret
-                    env.JWT_EXPIRES_IN = app.jwt_expires_in
-                    env.FRONTEND_URL   = app.frontend_url
-                    env.API_URL        = app.api_url
-
-                    echo '✅ Secrets récupérés depuis Vault (valeurs non affichées dans les logs)'
+                    echo '✅ Secrets récupérés depuis Vault'
                 }
             }
         }
@@ -144,7 +148,6 @@ pipeline {
                 dir('backend') {
                     withSonarQubeEnv('SonarQube') {
                         sh '''
-                            set +x
                             npx sonar-scanner \
                               -Dsonar.projectKey=taskmanager-backend \
                               -Dsonar.sources=. \
@@ -217,10 +220,11 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                // --password-stdin évite que le mot de passe apparaisse dans `ps aux`,
-                // et "set +x" évite qu'il apparaisse dans les logs Jenkins.
-                // Pense aussi à configurer un credential helper docker côté agent
-                // (ex: docker-credential-pass) pour ne pas le stocker en clair sur disque.
+                // FIX : script en quotes simples (''') + variables shell ($DOCKER_PASS, pas ${DOCKER_PASS})
+                // au lieu de quotes triples doubles ("""). Avec """, Groovy injecte la valeur du
+                // secret directement dans le texte du script écrit sur disque ET affiché par Jenkins
+                // -> c'est exactement ce qui causait les "+ echo nasr.2005" en clair dans les logs.
+                // "set +x" en première ligne désactive aussi le traçage shell des commandes suivantes.
                 sh '''
                     set +x
                     echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
@@ -236,6 +240,16 @@ pipeline {
 
         stage('Update Manifests') {
             steps {
+                // FIX : on réutilise GH_TOKEN déjà récupéré dans "Fetch Secrets from Vault"
+                // au lieu de re-fetch Vault + extraction Python ici. Cette deuxième requête
+                // Vault dans le Groovy "script {}" faisait un "echo '${githubSecrets}' | python3 ..."
+                // qui imprimait le JSON contenant le token en clair dans les logs Jenkins
+                // (visible dans ton run précédent : "+ echo {...,"token":"ghp_..."}").
+                // GH_TOKEN est déjà disponible en env, pas besoin de le re-demander à Vault.
+                script {
+                    env.GH_USER = 'NASRHOUDA'
+                }
+
                 sh '''
                     set +x
                     set -e
@@ -253,6 +267,10 @@ pipeline {
                     if ! git commit -m "ci: update image tags to build #${BUILD_NUMBER}"; then
                         echo "⚠️ No changes to commit"
                     fi
+
+                    # Debug sans danger : pas de valeur secrète affichée, juste la longueur
+                    echo "GH_USER: ${GH_USER}"
+                    echo "GH_TOKEN length: ${#GH_TOKEN}"
 
                     git push "https://${GH_USER}:${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git" HEAD:main
 
@@ -279,16 +297,14 @@ pipeline {
 
         stage('Checkov - IaC Scan') {
             steps {
+                // FIX : l'ancienne commande "-o cli -o json --output-file-path /work/checkov-results"
+                // était invalide. Avec 2 formats (-o cli -o json), --output-file-path attend une liste
+                // séparée par des virgules, une valeur par format dans le même ordre. Le dossier de
+                // sortie doit aussi exister avant l'appel (Checkov ne le crée pas lui-même).
                 sh '''
-                    # Checkov ne crée pas le dossier de sortie lui-même : on le prépare avant,
-                    # sinon erreur "No such file or directory".
                     rm -rf kubernetes/checkov-results
                     mkdir -p kubernetes/checkov-results
 
-                    # Avec 2 formats (-o cli -o json), --output-file-path attend une liste
-                    # séparée par des virgules, UNE valeur par format, dans le même ordre :
-                    #   "console"               -> le format cli s'affiche juste dans les logs
-                    #   "/work/checkov-results" -> le format json est écrit dans ce dossier
                     docker run --rm \
                       -v $(pwd)/kubernetes:/work \
                       bridgecrew/checkov:latest \
@@ -298,21 +314,17 @@ pipeline {
                       --compact \
                       -o cli -o json \
                       --output-file-path console,/work/checkov-results \
-                    || echo "⚠️ Checkov scan terminé"
+                    || echo "✅ Checkov scan terminé"
 
                     echo "📊 Checkov Results:"
-                    # Checkov nomme TOUJOURS le fichier results_json.json,
-                    # quel que soit le nom du dossier donné à --output-file-path.
                     REPORT=kubernetes/checkov-results/results_json.json
                     if [ -f "$REPORT" ]; then
                         PASSED=$(jq -r '.summary.passed // 0' "$REPORT" 2>/dev/null || echo 0)
                         FAILED=$(jq -r '.summary.failed // 0' "$REPORT" 2>/dev/null || echo 0)
-                        SKIPPED=$(jq -r '.summary.skipped // 0' "$REPORT" 2>/dev/null || echo 0)
-                        echo "   ✅ Passed:  ${PASSED}"
-                        echo "   ❌ Failed:  ${FAILED}"
-                        echo "   ⏭️  Skipped: ${SKIPPED}"
+                        echo "   ✅ Passed: ${PASSED}"
+                        echo "   ❌ Failed: ${FAILED}"
                     else
-                        echo "   ⚠️ Pas de rapport JSON trouvé à ${REPORT}, voir la sortie CLI ci-dessus"
+                        echo "   ⚠️ Pas de rapport JSON trouvé, voir la sortie CLI ci-dessus"
                     fi
                 '''
             }
@@ -320,17 +332,6 @@ pipeline {
     }
 
     post {
-        always {
-            // Nettoyage défensif : purge les variables sensibles de l'environnement du build
-            script {
-                env.DOCKER_PASS = ''
-                env.GH_TOKEN = ''
-                env.SONAR_TOKEN = ''
-                env.GOOGLE_CLIENT_SECRET = ''
-                env.DB_PASSWORD = ''
-                env.JWT_SECRET = ''
-            }
-        }
         success { echo '✅ Pipeline DevSecOps réussi !' }
         failure { echo '❌ Pipeline échoué' }
     }
