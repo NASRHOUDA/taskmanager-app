@@ -144,25 +144,49 @@ pipeline {
         }
 
         stage('SonarQube Analysis') {
-            steps {
-                dir('backend') {
-                    withSonarQubeEnv('SonarQube') {
-                        sh '''
-                            npx sonar-scanner \
-                              -Dsonar.projectKey=taskmanager \
-                              -Dsonar.sources=. \
-                              -Dsonar.host.url=http://host.docker.internal:9000 \
-                              -Dsonar.token=${SONAR_TOKEN} \
-                              -Dsonar.exclusions=node_modules/**,**/*.test.js \
-                              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                              -Dsonar.testExecutionReportPaths=coverage/test-report.xml \
-                              -Dsonar.tests=tests \
-                              -Dsonar.test.inclusions=tests/**/*.test.js
-                        '''
-                    }
-                }
+    steps {
+        dir('backend') {
+            // 1. Installer les dépendances
+            sh 'npm install'
+            
+            // 2. Lancer les tests avec génération des rapports
+            sh '''
+                npm test -- \
+                    --coverage \
+                    --testResultsProcessor=jest-junit \
+                    --coverageReporters=lcov \
+                    --coverageReporters=text \
+                    --collectCoverageFrom="src/**/*.js" \
+                    --collectCoverageFrom="!src/**/*.test.js" \
+                    --coverageDirectory=./coverage
+            '''
+            
+            // 3. Vérifier que les fichiers de rapport existent
+            sh '''
+                echo "📊 Vérification des fichiers de rapport :"
+                ls -la ./coverage/ || echo "⚠️ Coverage directory not found"
+                echo "Contenu du répertoire coverage :"
+                find ./coverage -type f 2>/dev/null || echo "⚠️ No coverage files"
+            '''
+            
+            // 4. Lancer l'analyse SonarQube
+            withSonarQubeEnv('SonarQube') {
+                sh '''
+                    npx sonar-scanner \
+                      -Dsonar.projectKey=taskmanager \
+                      -Dsonar.sources=. \
+                      -Dsonar.host.url=http://host.docker.internal:9000 \
+                      -Dsonar.token=${SONAR_TOKEN} \
+                      -Dsonar.exclusions=node_modules/**,**/*.test.js \
+                      -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                      -Dsonar.testExecutionReportPaths=coverage/test-report.xml \
+                      -Dsonar.tests=tests \
+                      -Dsonar.test.inclusions=tests/**/*.test.js
+                '''
             }
         }
+    }
+}
 
         stage('SonarQube Quality Gate') {
             steps {
