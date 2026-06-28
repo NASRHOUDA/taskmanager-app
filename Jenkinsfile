@@ -144,54 +144,53 @@ pipeline {
         }
 
         stage('SonarQube Analysis') {
-    steps {
-        dir('backend') {
-            sh 'npm install'
-            
-            sh '''
-                npm test -- \
-                    --coverage \
-                    --coverageReporters=lcov \
-                    --coverageReporters=text \
-                    --coverageDirectory=./coverage \
-                    || echo "⚠️ Tests terminés"
-            '''
-            
-            sh '''
-                echo "📊 Vérification des fichiers de rapport :"
-                ls -la ./coverage/ || echo "⚠️ Coverage directory not found"
-            '''
-            
-            withSonarQubeEnv('SonarQube') {
-                sh '''
-                    npx sonar-scanner \
-                      -Dsonar.projectKey=taskmanager \
-                      -Dsonar.sources=. \
-                      -Dsonar.host.url=http://host.docker.internal:9000 \
-                      -Dsonar.token=${SONAR_TOKEN} \
-                      -Dsonar.exclusions=node_modules/**,**/*.test.js \
-                      -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                      -Dsonar.tests=tests \
-                      -Dsonar.test.inclusions=tests/**/*.test.js
-                '''
+            steps {
+                dir('backend') {
+                    sh 'npm install'
+                    
+                    sh '''
+                        npm test -- \
+                            --coverage \
+                            --coverageReporters=lcov \
+                            --coverageReporters=text \
+                            --coverageDirectory=./coverage \
+                            || echo "⚠️ Tests terminés"
+                    '''
+                    
+                    sh '''
+                        echo "📊 Vérification des fichiers de rapport :"
+                        ls -la ./coverage/ || echo "⚠️ Coverage directory not found"
+                    '''
+                    
+                    withSonarQubeEnv('SonarQube') {
+                        sh '''
+                            npx sonar-scanner \
+                              -Dsonar.projectKey=taskmanager \
+                              -Dsonar.sources=. \
+                              -Dsonar.host.url=http://host.docker.internal:9000 \
+                              -Dsonar.token=${SONAR_TOKEN} \
+                              -Dsonar.exclusions=node_modules/**,**/*.test.js \
+                              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                              -Dsonar.tests=tests \
+                              -Dsonar.test.inclusions=tests/**/*.test.js
+                        '''
+                    }
+                }
             }
         }
-    }
-}
 
-stage('SonarQube Quality Gate') {
-    steps {
-        script {
-            def qg = waitForQualityGate()
-            if (qg.status != 'OK') {
-                echo "⚠️ Quality Gate status: ${qg.status} - Pipeline continue"
-            } else {
-                echo "✅ Quality Gate passed: ${qg.status}"
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    def qg = waitForQualityGate()
+                    if (qg.status != 'OK') {
+                        echo "⚠️ Quality Gate status: ${qg.status} - Pipeline continue"
+                    } else {
+                        echo "✅ Quality Gate passed: ${qg.status}"
+                    }
+                }
             }
         }
-    }
-}
-        
 
         stage('Build Docker Images') {
             steps {
@@ -233,11 +232,6 @@ stage('SonarQube Quality Gate') {
 
         stage('Push to Docker Hub') {
             steps {
-                // FIX : script en quotes simples (''') + variables shell ($DOCKER_PASS, pas ${DOCKER_PASS})
-                // au lieu de quotes triples doubles ("""). Avec """, Groovy injecte la valeur du
-                // secret directement dans le texte du script écrit sur disque ET affiché par Jenkins
-                // -> c'est exactement ce qui causait les "+ echo nasr.2005" en clair dans les logs.
-                // "set +x" en première ligne désactive aussi le traçage shell des commandes suivantes.
                 sh '''
                     set +x
                     echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
@@ -253,12 +247,6 @@ stage('SonarQube Quality Gate') {
 
         stage('Update Manifests') {
             steps {
-                // FIX : on réutilise GH_TOKEN déjà récupéré dans "Fetch Secrets from Vault"
-                // au lieu de re-fetch Vault + extraction Python ici. Cette deuxième requête
-                // Vault dans le Groovy "script {}" faisait un "echo '${githubSecrets}' | python3 ..."
-                // qui imprimait le JSON contenant le token en clair dans les logs Jenkins
-                // (visible dans ton run précédent : "+ echo {...,"token":"ghp_..."}").
-                // GH_TOKEN est déjà disponible en env, pas besoin de le re-demander à Vault.
                 script {
                     env.GH_USER = 'NASRHOUDA'
                 }
@@ -281,7 +269,6 @@ stage('SonarQube Quality Gate') {
                         echo "⚠️ No changes to commit"
                     fi
 
-                    # Debug sans danger : pas de valeur secrète affichée, juste la longueur
                     echo "GH_USER: ${GH_USER}"
                     echo "GH_TOKEN length: ${#GH_TOKEN}"
 
@@ -309,58 +296,53 @@ stage('SonarQube Quality Gate') {
         }
 
         stage('Checkov - IaC Scan') {
-    steps {
-        script {
-            // Créer le répertoire pour les résultats
-            sh '''
-                rm -rf kubernetes/checkov-results
-                mkdir -p kubernetes/checkov-results
-            '''
-            
-            // Exécuter Checkov avec les bons paramètres
-            sh '''
-                docker run --rm \
-                    -v ${PWD}/kubernetes:/work \
-                    bridgecrew/checkov:latest \
-                    -d /work \
-                    --framework kubernetes \
-                    --soft-fail \
-                    --output cli \
-                    --output json \
-                    --output-file-path /work/checkov-results/results.json
-            '''
-            
-            // Vérifier que le rapport JSON existe
-            sh '''
-                echo "📊 Checkov Results:"
-                if [ -f kubernetes/checkov-results/results.json ]; then
-                    echo "✅ Rapport JSON généré avec succès"
-                    echo "📄 Contenu du rapport :"
-                    cat kubernetes/checkov-results/results.json | jq '.' || cat kubernetes/checkov-results/results.json
-                else
-                    echo "⚠️ Le rapport JSON n'a pas été généré"
-                    echo "📁 Contenu du répertoire checkov-results :"
-                    ls -la kubernetes/checkov-results/ || echo "Répertoire vide"
-                fi
-            '''
-        }
-    }
-    post {
-        always {
-            script {
-                // Archiver les résultats même si le scan échoue
-                try {
-                    archiveArtifacts artifacts: 'kubernetes/checkov-results/**/*', fingerprint: true
-                } catch (Exception e) {
-                    echo "⚠️ Impossible d'archiver les artefacts : ${e.message}"
+            steps {
+                script {
+                    sh '''
+                        rm -rf kubernetes/checkov-results
+                        mkdir -p kubernetes/checkov-results
+                    '''
+                    
+                    sh '''
+                        docker run --rm \
+                            -v ${PWD}/kubernetes:/work \
+                            bridgecrew/checkov:latest \
+                            -d /work \
+                            --framework kubernetes \
+                            --soft-fail \
+                            --output cli \
+                            --output json \
+                            --output-file-path /work/checkov-results/results.json
+                    '''
+                    
+                    sh '''
+                        echo "📊 Checkov Results:"
+                        if [ -f kubernetes/checkov-results/results.json ]; then
+                            echo "✅ Rapport JSON généré avec succès"
+                            cat kubernetes/checkov-results/results.json | jq '.' 2>/dev/null || cat kubernetes/checkov-results/results.json
+                        else
+                            echo "⚠️ Le rapport JSON n'a pas été généré"
+                            ls -la kubernetes/checkov-results/ || echo "Répertoire vide"
+                        fi
+                    '''
+                }
+            }
+            post {
+                always {
+                    script {
+                        try {
+                            archiveArtifacts artifacts: 'kubernetes/checkov-results/**/*', fingerprint: true, allowEmptyArchive: true
+                        } catch (Exception e) {
+                            echo "⚠️ Impossible d'archiver les artefacts : ${e.message}"
+                        }
+                    }
                 }
             }
         }
-    }
-}
+    }  // ← FERMETURE DE stages
 
     post {
         success { echo '✅ Pipeline DevSecOps réussi !' }
         failure { echo '❌ Pipeline échoué' }
     }
-}
+}  // ← FERMETURE FINALE DU PIPELINE
