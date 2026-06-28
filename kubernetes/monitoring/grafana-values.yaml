@@ -1,0 +1,46 @@
+persistence:
+  enabled: false
+
+adminPassword: admin
+
+service:
+  type: ClusterIP
+  port: 80
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      url: http://prometheus-server.monitoring.svc.cluster.local
+      access: proxy
+      isDefault: true
+
+grafana.ini:
+  server:
+    root_url: "http://grafana.local"
+  auth:
+    disable_login_form: false
+  auth.anonymous:
+    enabled: false
+
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+    - name: 'default'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      editable: true
+      options:
+        path: /var/lib/grafana/dashboards/default
+
+dashboards:
+  default:
+    taskmanager-overview:
+      gnetId: 14282
+      revision: 1
+      datasource: Prometheus

@@ -1,0 +1,37 @@
+alertmanager:
+  enabled: false
+
+pushgateway:
+  enabled: false
+
+server:
+  persistentVolume:
+    enabled: false
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+  service:
+    type: ClusterIP
+    port: 80
+  
+  global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+  
+  extraScrapeConfigs: |
+    - job_name: 'taskmanager-backend'
+      static_configs:
+        - targets: ['backend-service.taskmanager.svc.cluster.local:5000']
+          labels:
+            app: taskmanager
+            service: backend
+    - job_name: 'taskmanager-frontend'
+      static_configs:
+        - targets: ['frontend-service.taskmanager.svc.cluster.local:80']
+          labels:
+            app: taskmanager
+            service: frontend
