@@ -12,35 +12,38 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    // 1️⃣ Vérifie si le token est dans l'URL
+    const params = new URLSearchParams(window.location.search);
+    let token = params.get("token");
+    
+    console.log("🔍 Token from URL:", token);
+
+    // 2️⃣ Si pas dans URL, cherche dans localStorage
+    if (!token) {
+      token = localStorage.getItem("token");
+      console.log("🔍 Token from localStorage:", token);
+    }
+
+    // 3️⃣ Si token trouvé, décoder et sauvegarder
     if (token) {
+      localStorage.setItem("token", token);
       api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      
       const decoded = decodeJWT(token);
+      console.log("📦 Decoded JWT:", decoded);
+      
       if (decoded) {
-        setUser({
+        const userData = {
           id: decoded.id,
           email: decoded.email,
           name: decoded.email.split('@')[0]
-        });
+        };
+        console.log("👤 User object set to:", userData);
+        setUser(userData);
       }
-      setLoading(false);
-    } else {
-      setLoading(false);
     }
+    setLoading(false);
   }, []);
-
-  const fetchUser = async () => {
-    try {
-      const response = await api.get("/auth/me");
-      setUser(response.data);
-    } catch (error) {
-      console.error("Failed to fetch user:", error);
-      localStorage.removeItem("token");
-      delete api.defaults.headers.common["Authorization"];
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const login = async (email, password) => {
     try {
