@@ -309,40 +309,55 @@ stage('SonarQube Quality Gate') {
         }
 
         stage('Checkov - IaC Scan') {
-            steps {
-                // FIX : l'ancienne commande "-o cli -o json --output-file-path /work/checkov-results"
-                // était invalide. Avec 2 formats (-o cli -o json), --output-file-path attend une liste
-                // séparée par des virgules, une valeur par format dans le même ordre. Le dossier de
-                // sortie doit aussi exister avant l'appel (Checkov ne le crée pas lui-même).
-                sh '''
-                    rm -rf kubernetes/checkov-results
-                    mkdir -p kubernetes/checkov-results
-
-                    docker run --rm \
-                      -v $(pwd)/kubernetes:/work \
-                      bridgecrew/checkov:latest \
-                      -d /work \
-                      --framework kubernetes \
-                      --soft-fail \
-                      --compact \
-                      -o cli -o json \
-                      --output-file-path console,/work/checkov-results \
-                    || echo "✅ Checkov scan terminé"
-
-                    echo "📊 Checkov Results:"
-                    REPORT=kubernetes/checkov-results/results_json.json
-                    if [ -f "$REPORT" ]; then
-                        PASSED=$(jq -r '.summary.passed // 0' "$REPORT" 2>/dev/null || echo 0)
-                        FAILED=$(jq -r '.summary.failed // 0' "$REPORT" 2>/dev/null || echo 0)
-                        echo "   ✅ Passed: ${PASSED}"
-                        echo "   ❌ Failed: ${FAILED}"
-                    else
-                        echo "   ⚠️ Pas de rapport JSON trouvé, voir la sortie CLI ci-dessus"
-                    fi
-                '''
+    steps {
+        script {
+            // Créer le répertoire pour les résultats
+            sh '''
+                rm -rf kubernetes/checkov-results
+                mkdir -p kubernetes/checkov-results
+            '''
+            
+            // Exécuter Checkov avec les bons paramètres
+            sh '''
+                docker run --rm \
+                    -v ${PWD}/kubernetes:/work \
+                    bridgecrew/checkov:latest \
+                    -d /work \
+                    --framework kubernetes \
+                    --soft-fail \
+                    --output cli \
+                    --output json \
+                    --output-file-path /work/checkov-results/results.json
+            '''
+            
+            // Vérifier que le rapport JSON existe
+            sh '''
+                echo "📊 Checkov Results:"
+                if [ -f kubernetes/checkov-results/results.json ]; then
+                    echo "✅ Rapport JSON généré avec succès"
+                    echo "📄 Contenu du rapport :"
+                    cat kubernetes/checkov-results/results.json | jq '.' || cat kubernetes/checkov-results/results.json
+                else
+                    echo "⚠️ Le rapport JSON n'a pas été généré"
+                    echo "📁 Contenu du répertoire checkov-results :"
+                    ls -la kubernetes/checkov-results/ || echo "Répertoire vide"
+                fi
+            '''
+        }
+    }
+    post {
+        always {
+            script {
+                // Archiver les résultats même si le scan échoue
+                try {
+                    archiveArtifacts artifacts: 'kubernetes/checkov-results/**/*', fingerprint: true
+                } catch (Exception e) {
+                    echo "⚠️ Impossible d'archiver les artefacts : ${e.message}"
+                }
             }
         }
     }
+}
 
     post {
         success { echo '✅ Pipeline DevSecOps réussi !' }
