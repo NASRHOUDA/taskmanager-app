@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import api from "../services/api";
+import { decodeJWT } from "../utils/jwt";
 
 const AuthContext = createContext();
 
@@ -14,7 +15,15 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem("token");
     if (token) {
       api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-      fetchUser();
+      const decoded = decodeJWT(token);
+      if (decoded) {
+        setUser({
+          id: decoded.id,
+          email: decoded.email,
+          name: decoded.email.split('@')[0]
+        });
+      }
+      setLoading(false);
     } else {
       setLoading(false);
     }
@@ -25,6 +34,7 @@ export const AuthProvider = ({ children }) => {
       const response = await api.get("/auth/me");
       setUser(response.data);
     } catch (error) {
+      console.error("Failed to fetch user:", error);
       localStorage.removeItem("token");
       delete api.defaults.headers.common["Authorization"];
     } finally {
@@ -52,7 +62,6 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
       const response = await api.post("/auth/register", { name, email, password });
-      // Si votre API renvoie un token après l'inscription
       if (response.data.token) {
         const { token, user } = response.data;
         localStorage.setItem("token", token);
