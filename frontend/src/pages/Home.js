@@ -34,7 +34,7 @@ function Home() {
           Bienvenue, <strong>{user?.name || user?.email || 'Utilisateur'}</strong> !
         </p>
         <p style={{ color: '#666', marginBottom: '30px' }}>
-          Vous êtes maintenant connecté avec succès.
+          Bonjour, vous êtes maintenant connecté avec succès.
         </p>
         <button
           onClick={handleLogout}
