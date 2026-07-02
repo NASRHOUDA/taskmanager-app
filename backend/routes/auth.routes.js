@@ -24,7 +24,7 @@ router.get('/google/callback',
       { expiresIn: '7d' }
     );
     // Rediriger vers /home avec le token (au lieu de /dashboard)
-    const redirectUrl = 'http://localhost:3000/home?token=' + token;
+    const redirectUrl = process.env.FRONTEND_URL + '/home?token=' + token;
     console.log('🔀 Redirecting to:', redirectUrl);
     res.redirect(redirectUrl);
   }

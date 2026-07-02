@@ -82,11 +82,11 @@ spec:
               name: backend-secrets
               key: GOOGLE_CLIENT_SECRET
         - name: GOOGLE_CALLBACK_URL
-          value: http://localhost:5000/api/auth/google/callback
+          value: http://localhost/api/auth/google/callback
         - name: FRONTEND_URL
-          value: http://localhost:3000
+          value: http://localhost
         - name: API_URL
-          value: http://localhost:5000/api
+          value: http://localhost/api
         resources:
           requests:
             memory: "256Mi"
