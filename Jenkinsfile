@@ -248,35 +248,35 @@ pipeline {
         }
 
         stage('Update Manifests') {
-            steps {
-                
-                sh '''
-                    set +x
-                    set -e
+    steps {
+        
+        sh '''
+            set +x
+            set -e
 
-                    git config user.email jenkins@taskmanager.com
-                    git config user.name "Jenkins CI"
+            git config user.email jenkins@taskmanager.com
+            git config user.name "Jenkins CI"
 
-                    export GIT_TERMINAL_PROMPT=0
+            export GIT_TERMINAL_PROMPT=0
 
-                    sed -i "s|image: houdanasr/taskmanager-backend:.*|image: houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/backend-deployment.yaml
-                    sed -i "s|image: houdanasr/taskmanager-frontend:.*|image: houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/frontend-deployment.yaml
+            sed -i "s|image: houdanasr/taskmanager-backend:.*|image: houdanasr/taskmanager-backend:${BUILD_NUMBER}|g" kubernetes/deployment-advanced.yaml
+            sed -i "s|image: houdanasr/taskmanager-frontend:.*|image: houdanasr/taskmanager-frontend:${BUILD_NUMBER}|g" kubernetes/deployment-advanced.yaml
 
-                    git add kubernetes/backend-deployment.yaml kubernetes/frontend-deployment.yaml
+            git add kubernetes/deployment-advanced.yaml
 
-                    if ! git commit -m "ci: update image tags to build #${BUILD_NUMBER}"; then
-                        echo "⚠️ No changes to commit"
-                    fi
+            if ! git commit -m "ci: update image tags to build #${BUILD_NUMBER}"; then
+                echo "⚠️ No changes to commit"
+            fi
 
-                    echo "GH_USER: ${GH_USER}"
-                    echo "GH_TOKEN length: ${#GH_TOKEN}"
+            echo "GH_USER: ${GH_USER}"
+            echo "GH_TOKEN length: ${#GH_TOKEN}"
 
-                    git push "https://${GH_USER}:${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git" HEAD:main
+            git push "https://${GH_USER}:${GH_TOKEN}@github.com/NASRHOUDA/taskmanager-app.git" HEAD:main
 
-                    echo "✅ Manifests pushed successfully to GitHub"
-                '''
-            }
-        }
+            echo "✅ Manifests pushed successfully to GitHub"
+        '''
+    }
+}
 
         stage('Flux Reconciliation') {
             steps {
