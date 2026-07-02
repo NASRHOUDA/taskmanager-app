@@ -73,6 +73,7 @@ spec:
             - 127.0.0.1
           initialDelaySeconds: 5
           periodSeconds: 5
+          timeoutSeconds: 5
       terminationGracePeriodSeconds: 30
   volumeClaimTemplates:
   - metadata:
