@@ -278,7 +278,7 @@ pipeline {
     }
 }
 
-        stage('Flux Reconciliation') {
+                stage('Flux Reconciliation') {
             steps {
                 sh '''
                     sleep 30
@@ -294,8 +294,31 @@ pipeline {
             }
         }
 
+        stage('DAST Security Scan') {
+            steps {
+                echo "🚀 Lancement de l'analyse dynamique (DAST) avec OWASP ZAP..."
+                // Utilisation de l'image officielle OWASP ZAP au format "Baseline" (scan rapide d'API/Web)
+                // -t spécifie l'URL de votre application déployée dans Kubernetes
+                // -r génère un rapport HTML complet
+                sh '''
+                    docker run --rm -v $(pwd):/zap/wrk:rw owasp/zap2docker-stable zap-baseline.py \
+                    -t http://votre-cluster.local \
+                    -r zap_report.html || true
+                '''
+                // Publication du rapport HTML directement dans l'interface de Jenkins
+                publishHTML([
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: '.',
+                    reportFiles: 'zap_report.html',
+                    reportName: 'OWASP ZAP DAST Report',
+                    reportTitles: 'Rapport Analyse Dynamique DAST'
+                ])
+            }
+        }
         
-    } 
+    } // ← Fin du bloc stages
 
     post {
         success { echo '✅ Pipeline DevSecOps réussi !' }
