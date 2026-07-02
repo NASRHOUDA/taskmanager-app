@@ -1,0 +1,151 @@
+apiVersion: v1
+items:
+- apiVersion: autoscaling/v2
+  kind: HorizontalPodAutoscaler
+  metadata:
+    creationTimestamp: "2026-07-01T18:18:39Z"
+    labels:
+      kustomize.toolkit.fluxcd.io/name: taskmanager
+      kustomize.toolkit.fluxcd.io/namespace: flux-system
+    name: backend-hpa
+    namespace: taskmanager
+    resourceVersion: "403265"
+    uid: 1194f807-81e2-4ceb-8cfc-66d0f420b5c1
+  spec:
+    behavior:
+      scaleDown:
+        policies:
+        - periodSeconds: 30
+          type: Pods
+          value: 1
+        selectPolicy: Max
+        stabilizationWindowSeconds: 300
+      scaleUp:
+        policies:
+        - periodSeconds: 15
+          type: Pods
+          value: 4
+        - periodSeconds: 15
+          type: Percent
+          value: 100
+        selectPolicy: Max
+        stabilizationWindowSeconds: 60
+    maxReplicas: 5
+    metrics:
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 70
+          type: Utilization
+      type: Resource
+    - resource:
+        name: memory
+        target:
+          averageUtilization: 80
+          type: Utilization
+      type: Resource
+    minReplicas: 2
+    scaleTargetRef:
+      apiVersion: apps/v1
+      kind: Deployment
+      name: backend
+  status:
+    conditions:
+    - lastTransitionTime: "2026-07-01T18:18:54Z"
+      message: recommended size matches current size
+      reason: ReadyForNewScale
+      status: "True"
+      type: AbleToScale
+    - lastTransitionTime: "2026-07-01T19:14:21Z"
+      message: the HPA was able to successfully calculate a replica count from cpu
+        resource utilization (percentage of request)
+      reason: ValidMetricFound
+      status: "True"
+      type: ScalingActive
+    - lastTransitionTime: "2026-07-01T19:19:52Z"
+      message: the desired replica count is less than the minimum replica count
+      reason: TooFewReplicas
+      status: "True"
+      type: ScalingLimited
+    currentMetrics:
+    - resource:
+        current:
+          averageUtilization: 4
+          averageValue: 12m
+        name: cpu
+      type: Resource
+    - resource:
+        current:
+          averageUtilization: 13
+          averageValue: 35258Ki
+        name: memory
+      type: Resource
+    currentReplicas: 2
+    desiredReplicas: 2
+- apiVersion: autoscaling/v2
+  kind: HorizontalPodAutoscaler
+  metadata:
+    creationTimestamp: "2026-07-01T18:18:39Z"
+    labels:
+      kustomize.toolkit.fluxcd.io/name: taskmanager
+      kustomize.toolkit.fluxcd.io/namespace: flux-system
+    name: frontend-hpa
+    namespace: taskmanager
+    resourceVersion: "403058"
+    uid: 0635d2ce-0e74-4a58-bb86-31aa0006d30d
+  spec:
+    maxReplicas: 4
+    metrics:
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 75
+          type: Utilization
+      type: Resource
+    - resource:
+        name: memory
+        target:
+          averageUtilization: 85
+          type: Utilization
+      type: Resource
+    minReplicas: 2
+    scaleTargetRef:
+      apiVersion: apps/v1
+      kind: Deployment
+      name: frontend
+  status:
+    conditions:
+    - lastTransitionTime: "2026-07-01T18:18:54Z"
+      message: recommended size matches current size
+      reason: ReadyForNewScale
+      status: "True"
+      type: AbleToScale
+    - lastTransitionTime: "2026-07-01T19:15:06Z"
+      message: the HPA was able to successfully calculate a replica count from cpu
+        resource utilization (percentage of request)
+      reason: ValidMetricFound
+      status: "True"
+      type: ScalingActive
+    - lastTransitionTime: "2026-07-01T19:18:21Z"
+      message: the desired replica count is less than the minimum replica count
+      reason: TooFewReplicas
+      status: "True"
+      type: ScalingLimited
+    currentMetrics:
+    - resource:
+        current:
+          averageUtilization: 1
+          averageValue: 1m
+        name: cpu
+      type: Resource
+    - resource:
+        current:
+          averageUtilization: 5
+          averageValue: 7694Ki
+        name: memory
+      type: Resource
+    currentReplicas: 2
+    desiredReplicas: 2
+kind: List
+metadata:
+  resourceVersion: ""

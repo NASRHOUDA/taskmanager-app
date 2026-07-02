@@ -3,13 +3,15 @@ kind: Kustomization
 namespace: taskmanager
 resources:
   - configmap.yaml
-  - services.yaml
+  - backend-service.yaml
+  - frontend-service.yaml
+  - postgres-service.yaml
   - postgres-statefulset.yaml
   - deployment-advanced.yaml
   - hpa-advanced.yaml
   - pdb-advanced.yaml
   - ingress.yaml
-  - network-policies.yaml
-  - externalsecret.yaml
-  - secretstore.yaml
-  - pvc.yaml
+  - networkpolicies/backend-netpol.yaml
+  - networkpolicies/postgres-netpol.yaml
+  - external-secret.yaml
+  - vault-secretstore.yaml
