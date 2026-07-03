@@ -385,33 +385,37 @@ stage('Trivy Image Scan') {
         }
 
         stage('DAST Security Scan') {
-            steps {
-                echo "🚀 Lancement de l'analyse dynamique (DAST) avec OWASP ZAP..."
-                sh '''
-                    set +e
+    steps {
+        echo "🚀 Lancement de l'analyse dynamique (DAST) avec OWASP ZAP..."
+        sh '''
+            set +e
+            mkdir -p "${WORKSPACE}/zap-report"
 
-                    # frontend-service est déjà exposé sur http://localhost (port 80)
-                    # via "minikube tunnel", lancé en parallèle. Pas besoin de
-                    # kubectl port-forward ici : ça évite le conflit avec le port
-                    # 8080 déjà utilisé par Jenkins lui-même (le conteneur ZAP
-                    # partage le network namespace de Jenkins via
-                    # --network=container:jenkins).
+            # Pas de bind-mount du workspace : sur un Jenkins qui pilote Docker via
+            # le socket (docker-outside-of-docker), ${WORKSPACE} vu par Jenkins ne
+            # correspond pas forcément au même chemin côté hôte Docker réel -> le
+            # bind mount créait un dossier vide root/755, d'où le "Permission
+            # denied" malgré le chmod 777 (appliqué au mauvais chemin).
+            # On écrit donc le rapport DANS le conteneur puis on le récupère
+            # avec docker cp, ce qui évite complètement ce problème de mapping.
+            docker run --name zap-scan-${BUILD_NUMBER} \
+              --add-host=host.docker.internal:host-gateway \
+              zaproxy/zap-stable zap-baseline.py \
+              -t http://host.docker.internal/ \
+              -r zap_report.html
+            SCAN_EXIT=$?
+            echo "ZAP exit code: ${SCAN_EXIT}"
 
-                    # Dossier dédié en écriture pour ZAP (le conteneur tourne en
-                    # non-root et ne peut pas écrire dans le workspace tel quel :
-                    # c'est ce qui causait les erreurs "Permission denied").
-                    mkdir -p "${WORKSPACE}/zap-report"
-                    chmod 777 "${WORKSPACE}/zap-report"
+            docker cp "zap-scan-${BUILD_NUMBER}:/zap/wrk/zap_report.html" \
+              "${WORKSPACE}/zap-report/zap_report.html" 2>/dev/null \
+              || echo "⚠️ Rapport ZAP introuvable (le scan a probablement échoué avant génération)."
 
-                    docker run --rm --network=container:jenkins \
-                      -v "${WORKSPACE}/zap-report:/zap/wrk:rw" \
-                      zaproxy/zap-stable zap-baseline.py \
-                      -t http://localhost/ \
-                      -r zap_report.html || true
-                '''
-                archiveArtifacts artifacts: 'zap-report/zap_report.html', allowEmptyArchive: true
-            }
-        }
+            docker rm zap-scan-${BUILD_NUMBER} >/dev/null 2>&1 || true
+            exit 0
+        '''
+        archiveArtifacts artifacts: 'zap-report/zap_report.html', allowEmptyArchive: true
+    }
+}
         
     } // ← Fin du bloc stages
 
