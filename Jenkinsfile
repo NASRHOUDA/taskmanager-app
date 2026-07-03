@@ -295,30 +295,29 @@ pipeline {
         }
 
         stage('DAST Security Scan') {
-    steps {
-        echo "🚀 Lancement de l'analyse dynamique (DAST) avec OWASP ZAP..."
-        sh '''
-            set +e
+            steps {
+                echo "🚀 Lancement de l'analyse dynamique (DAST) avec OWASP ZAP..."
+                sh '''
+                    set +e
 
-            # Port-forward du frontend en arrière-plan
-            kubectl port-forward -n taskmanager svc/frontend-service 8080:80 &
-            PF_PID=$!
-            sleep 5
+                    # Port-forward du frontend en arrière-plan
+                    kubectl port-forward -n taskmanager svc/frontend-service 8080:80 &
+                    PF_PID=$!
+                    sleep 5
 
-            # Scan ZAP baseline, partage le network namespace de Jenkins
-            # pour voir le port-forward en localhost:8080
-            docker run --rm --network=container:jenkins \
-              -v $(pwd):/zap/wrk:rw \
-              zaproxy/zap-stable zap-baseline.py \
-              -t http://localhost:8080 \
-              -r zap_report.html || true
+                    # Scan ZAP baseline, partage le network namespace de Jenkins
+                    docker run --rm --network=container:jenkins \
+                      -v $(pwd):/zap/wrk:rw \
+                      zaproxy/zap-stable zap-baseline.py \
+                      -t http://localhost:8080 \
+                      -r zap_report.html || true
 
-            # Nettoyage du port-forward
-            kill $PF_PID 2>/dev/null || true
-        '''
-        archiveArtifacts artifacts: 'zap_report.html', allowEmptyArchive: true
-    }
-}
+                    # Nettoyage du port-forward
+                    kill $PF_PID 2>/dev/null || true
+                '''
+                archiveArtifacts artifacts: 'zap_report.html', allowEmptyArchive: true
+            }
+        }
         
     } // ← Fin du bloc stages
 
