@@ -216,24 +216,29 @@ pipeline {
                 }
 
                 sh '''
-                    echo "📊 Vérification des fichiers de rapport :"
-                    ls -la backend/coverage/ || echo "⚠️ Backend coverage directory not found"
-                    ls -la frontend/coverage/ || echo "⚠️ Frontend coverage directory not found"
-                '''
+    echo "📊 Vérification des fichiers de rapport :"
+    ls -la backend/coverage/ || echo "⚠️ Backend coverage directory not found"
+    ls -la frontend/coverage/ || echo "⚠️ Frontend coverage directory not found"
 
-                withSonarQubeEnv('SonarQube') {
-                    sh '''
-                        npx sonar-scanner \
-                          -Dsonar.projectKey=taskmanager \
-                          -Dsonar.sources=backend,frontend \
-                          -Dsonar.host.url=http://host.docker.internal:9000 \
-                          -Dsonar.token=${SONAR_TOKEN} \
-                          -Dsonar.exclusions=**/node_modules/**,**/*.test.js,**/build/**,**/dist/** \
-                          -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info,frontend/coverage/lcov.info \
-                          -Dsonar.tests=backend/tests,frontend/src \
-                          -Dsonar.test.inclusions=**/*.test.js
-                    '''
-                }
+    # Nettoyage des anciens dossiers .scannerwork qui traînent
+    # (évite le WARN "Found multiple report-task.txt")
+    rm -rf backend/.scannerwork frontend/.scannerwork .scannerwork
+'''
+
+withSonarQubeEnv('SonarQube') {
+    sh '''
+        npx sonar-scanner \
+          -Dsonar.projectKey=taskmanager \
+          -Dsonar.sources=backend,frontend \
+          -Dsonar.host.url=http://host.docker.internal:9000 \
+          -Dsonar.token=${SONAR_TOKEN} \
+          -Dsonar.exclusions=**/node_modules/**,**/*.test.js,**/build/**,**/dist/** \
+          -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info,frontend/coverage/lcov.info \
+          -Dsonar.tests=backend/tests,frontend/src \
+          -Dsonar.test.inclusions=**/*.test.js \
+          -Dsonar.working.directory=.scannerwork
+    '''
+}
             }
         }
 
