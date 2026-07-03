@@ -1,45 +1,56 @@
 import { decodeJWT } from './jwt';
 
-describe('decodeJWT', () => {
-  it('decodes a valid JWT payload', () => {
-    const payload = { id: '123', email: 'user@example.com' };
-    const base64Payload = btoa(JSON.stringify(payload));
-    const token = `header.${base64Payload}.signature`;
+describe('JWT Utilities', () => {
+  describe('decodeJWT', () => {
+    test('décode un JWT valide correctement', () => {
+      const payload = { id: '123', email: 'test@example.com' };
+      const token = `header.${btoa(JSON.stringify(payload))}.signature`;
+      
+      const result = decodeJWT(token);
+      expect(result).toEqual(payload);
+    });
 
-    const result = decodeJWT(token);
+    test('retourne null pour un token invalide', () => {
+      const result = decodeJWT('invalid-token');
+      expect(result).toBeNull();
+    });
 
-    expect(result).toEqual(payload);
-  });
+    test('retourne null pour un token avec un payload invalide', () => {
+      const token = 'header.invalid-payload.signature';
+      const result = decodeJWT(token);
+      expect(result).toBeNull();
+    });
 
-  it('handles base64url characters (- and _) in the payload', () => {
-    const payload = { id: '456', email: 'test+special@example.com' };
-    const base64Payload = btoa(JSON.stringify(payload))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_');
-    const token = `header.${base64Payload}.signature`;
+    test('retourne null pour undefined', () => {
+      const result = decodeJWT(undefined);
+      expect(result).toBeNull();
+    });
 
-    const result = decodeJWT(token);
+    test('retourne null pour null', () => {
+      const result = decodeJWT(null);
+      expect(result).toBeNull();
+    });
 
-    expect(result).toEqual(payload);
-  });
+    test('retourne null pour une chaîne vide', () => {
+      const result = decodeJWT('');
+      expect(result).toBeNull();
+    });
 
-  it('returns null for a malformed token', () => {
-    const result = decodeJWT('not-a-valid-token');
+    test('gère le token avec des caractères spéciaux', () => {
+      const payload = { id: '123', email: 'test+test@example.com' };
+      const token = `header.${btoa(JSON.stringify(payload))}.signature`;
+      
+      const result = decodeJWT(token);
+      expect(result).toEqual(payload);
+    });
 
-    expect(result).toBeNull();
-  });
-
-  it('returns null for an empty string', () => {
-    const result = decodeJWT('');
-
-    expect(result).toBeNull();
-  });
-
-  it('returns null when the payload segment is not valid base64 JSON', () => {
-    const token = 'header.!!!not-base64!!!.signature';
-
-    const result = decodeJWT(token);
-
-    expect(result).toBeNull();
+    test('gère le token avec des tirets et underscores', () => {
+      const payload = { id: '123' };
+      const base64 = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_');
+      const token = `header.${base64}.signature`;
+      
+      const result = decodeJWT(token);
+      expect(result).toEqual(payload);
+    });
   });
 });

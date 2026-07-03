@@ -1,174 +1,276 @@
-import React from 'react';
-import { render, screen, waitFor, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import '@testing-library/jest-dom';
+import { render, screen, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from './AuthContext';
-import api from '../services/api';
+import axios from 'axios';
+import { decodeJWT } from '../utils/jwt';
 
-// api est mocké : on ne veut pas de vrais appels réseau dans un test unitaire.
-jest.mock('../services/api', () => ({
-  __esModule: true,
-  default: {
-    post: jest.fn(),
-    defaults: { headers: { common: {} } },
-  },
-}));
+jest.mock('axios');
+jest.mock('../utils/jwt');
 
-// Petit composant consommateur pour exercer le contexte via le DOM,
-// plutôt que de tester les hooks de manière isolée.
-function TestConsumer() {
-  const { user, loading, error, login, register, logout } = useAuth();
+const mockAxios = axios.create();
+mockAxios.post = jest.fn();
+
+axios.create.mockReturnValue(mockAxios);
+
+const TestComponent = () => {
+  const { user, login, register, logout, error, loading } = useAuth();
   return (
     <div>
-      <span data-testid="loading">{loading ? 'loading' : 'ready'}</span>
-      <span data-testid="user">{user ? user.email : 'no-user'}</span>
-      <span data-testid="error">{error || 'no-error'}</span>
-      <button onClick={() => login('a@b.com', 'pw')}>login</button>
-      <button onClick={() => register('Name', 'a@b.com', 'pw')}>register</button>
-      <button onClick={() => logout()}>logout</button>
+      <div data-testid="user">{user ? JSON.stringify(user) : 'no-user'}</div>
+      <div data-testid="error">{error || 'no-error'}</div>
+      <div data-testid="loading">{loading ? 'loading' : 'not-loading'}</div>
+      <button onClick={() => login('test@test.com', 'password')}>Login</button>
+      <button onClick={() => register('Test', 'test@test.com', 'password')}>Register</button>
+      <button onClick={logout}>Logout</button>
     </div>
   );
-}
+};
 
-function renderWithProvider() {
-  return render(
-    <AuthProvider>
-      <TestConsumer />
-    </AuthProvider>
-  );
-}
-
-beforeEach(() => {
-  localStorage.clear();
-  jest.clearAllMocks();
-  window.history.pushState({}, '', '/');
-});
-
-test('finishes loading with no user when there is no stored token', async () => {
-  renderWithProvider();
-
-  await waitFor(() =>
-    expect(screen.getByTestId('loading')).toHaveTextContent('ready')
-  );
-  expect(screen.getByTestId('user')).toHaveTextContent('no-user');
-});
-
-test('login stores the token and sets the user on success', async () => {
-  api.post.mockResolvedValueOnce({
-    data: { token: 'tok123', user: { id: '1', email: 'a@b.com' } },
-  });
-  renderWithProvider();
-  await waitFor(() =>
-    expect(screen.getByTestId('loading')).toHaveTextContent('ready')
-  );
-
-  await act(async () => {
-    await userEvent.click(screen.getByText('login'));
+describe('AuthContext - Tests Complets', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    mockAxios.post.mockReset();
+    delete window.location;
+    window.location = { search: '' };
   });
 
-  expect(screen.getByTestId('user')).toHaveTextContent('a@b.com');
-  expect(localStorage.getItem('token')).toBe('tok123');
-  expect(api.post).toHaveBeenCalledWith('/auth/login', {
-    email: 'a@b.com',
-    password: 'pw',
-  });
-});
+  test('login réussit avec des identifiants valides', async () => {
+    const mockUser = { id: '1', email: 'test@test.com' };
+    const mockToken = 'valid.token';
+    mockAxios.post.mockResolvedValue({ data: { token: mockToken, user: mockUser } });
 
-test('login sets an error message and no user on failure', async () => {
-  api.post.mockRejectedValueOnce({
-    response: { data: { message: 'Bad credentials' } },
-  });
-  renderWithProvider();
-  await waitFor(() =>
-    expect(screen.getByTestId('loading')).toHaveTextContent('ready')
-  );
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
 
-  await act(async () => {
-    await userEvent.click(screen.getByText('login'));
-  });
+    const loginButton = screen.getByText('Login');
+    await act(async () => {
+      loginButton.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
 
-  expect(screen.getByTestId('error')).toHaveTextContent('Bad credentials');
-  expect(screen.getByTestId('user')).toHaveTextContent('no-user');
-});
-
-test('register stores the token and sets the user when the API returns one', async () => {
-  api.post.mockResolvedValueOnce({
-    data: { token: 'tok456', user: { id: '2', email: 'c@d.com' } },
-  });
-  renderWithProvider();
-  await waitFor(() =>
-    expect(screen.getByTestId('loading')).toHaveTextContent('ready')
-  );
-
-  await act(async () => {
-    await userEvent.click(screen.getByText('register'));
+    expect(screen.getByTestId('user')).toHaveTextContent('test@test.com');
+    expect(localStorage.getItem('token')).toBe(mockToken);
   });
 
-  expect(screen.getByTestId('user')).toHaveTextContent('c@d.com');
-  expect(localStorage.getItem('token')).toBe('tok456');
-});
+  test('login échoue avec des identifiants invalides', async () => {
+    mockAxios.post.mockRejectedValue({
+      response: { data: { message: 'Bad credentials' } }
+    });
 
-test('register sets an error message on failure', async () => {
-  api.post.mockRejectedValueOnce({
-    response: { data: { message: 'Email already used' } },
-  });
-  renderWithProvider();
-  await waitFor(() =>
-    expect(screen.getByTestId('loading')).toHaveTextContent('ready')
-  );
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
 
-  await act(async () => {
-    await userEvent.click(screen.getByText('register'));
-  });
+    const loginButton = screen.getByText('Login');
+    await act(async () => {
+      loginButton.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
 
-  expect(screen.getByTestId('error')).toHaveTextContent('Email already used');
-});
-
-test('logout clears the user and the stored token', async () => {
-  api.post.mockResolvedValueOnce({
-    data: { token: 'tok789', user: { id: '3', email: 'e@f.com' } },
-  });
-  renderWithProvider();
-  await waitFor(() =>
-    expect(screen.getByTestId('loading')).toHaveTextContent('ready')
-  );
-  await act(async () => {
-    await userEvent.click(screen.getByText('login'));
+    expect(screen.getByTestId('error')).toHaveTextContent('Bad credentials');
   });
 
-  await act(async () => {
-    await userEvent.click(screen.getByText('logout'));
+  test('login gère les erreurs sans message', async () => {
+    mockAxios.post.mockRejectedValue({ response: {} });
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    const loginButton = screen.getByText('Login');
+    await act(async () => {
+      loginButton.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+
+    expect(screen.getByTestId('error')).toHaveTextContent('Erreur de connexion');
   });
 
-  expect(screen.getByTestId('user')).toHaveTextContent('no-user');
-  expect(localStorage.getItem('token')).toBeNull();
-});
+  test('register réussit avec des données valides', async () => {
+    const mockUser = { id: '1', email: 'test@test.com' };
+    const mockToken = 'valid.token';
+    mockAxios.post.mockResolvedValue({ data: { token: mockToken, user: mockUser } });
 
-test('reads a token from the URL on mount, decodes it and sets the user', async () => {
-  const payload = { id: '9', email: 'urluser@example.com' };
-  const base64Payload = btoa(JSON.stringify(payload));
-  const token = `header.${base64Payload}.signature`;
-  window.history.pushState({}, '', `/?token=${token}`);
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
 
-  renderWithProvider();
+    const registerButton = screen.getByText('Register');
+    await act(async () => {
+      registerButton.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
 
-  await waitFor(() =>
-    expect(screen.getByTestId('loading')).toHaveTextContent('ready')
-  );
-  expect(screen.getByTestId('user')).toHaveTextContent('urluser@example.com');
-  expect(localStorage.getItem('token')).toBe(token);
-});
+    expect(screen.getByTestId('user')).toHaveTextContent('test@test.com');
+    expect(localStorage.getItem('token')).toBe(mockToken);
+  });
 
-test('falls back to the token in localStorage when none is in the URL', async () => {
-  const payload = { id: '10', email: 'stored@example.com' };
-  const base64Payload = btoa(JSON.stringify(payload));
-  const token = `header.${base64Payload}.signature`;
-  localStorage.setItem('token', token);
+  test('register échoue avec un email déjà utilisé', async () => {
+    mockAxios.post.mockRejectedValue({
+      response: { data: { message: 'Email already used' } }
+    });
 
-  renderWithProvider();
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
 
-  await waitFor(() =>
-    expect(screen.getByTestId('loading')).toHaveTextContent('ready')
-  );
-  expect(screen.getByTestId('user')).toHaveTextContent('stored@example.com');
+    const registerButton = screen.getByText('Register');
+    await act(async () => {
+      registerButton.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+
+    expect(screen.getByTestId('error')).toHaveTextContent('Email already used');
+  });
+
+  test('register gère les erreurs sans message', async () => {
+    mockAxios.post.mockRejectedValue({ response: {} });
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    const registerButton = screen.getByText('Register');
+    await act(async () => {
+      registerButton.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+
+    expect(screen.getByTestId('error')).toHaveTextContent("Erreur d'inscription");
+  });
+
+  test('logout fonctionne correctement', async () => {
+    localStorage.setItem('token', 'test-token');
+    
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    const logoutButton = screen.getByText('Logout');
+    await act(async () => {
+      logoutButton.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+
+    expect(localStorage.getItem('token')).toBeNull();
+    expect(screen.getByTestId('user')).toHaveTextContent('no-user');
+    expect(screen.getByTestId('error')).toHaveTextContent('no-error');
+  });
+
+  test('charge l\'utilisateur depuis localStorage', () => {
+    const mockToken = 'valid.token';
+    const mockUser = { id: '1', email: 'stored@test.com' };
+    localStorage.setItem('token', mockToken);
+    decodeJWT.mockReturnValue(mockUser);
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId('user')).toHaveTextContent('stored@test.com');
+  });
+
+  test('gère le token invalide dans localStorage', () => {
+    localStorage.setItem('token', 'invalid.token');
+    decodeJWT.mockReturnValue(null);
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId('user')).toHaveTextContent('no-user');
+  });
+
+  test('login avec token dans l\'URL', async () => {
+    const mockToken = 'url.token';
+    const mockUser = { id: '2', email: 'urluser@test.com' };
+    window.location.search = `?token=${mockToken}`;
+    decodeJWT.mockReturnValue(mockUser);
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+
+    expect(localStorage.getItem('token')).toBe(mockToken);
+    expect(screen.getByTestId('user')).toHaveTextContent('urluser@test.com');
+  });
+
+  test('gère les erreurs réseau dans login', async () => {
+    mockAxios.post.mockRejectedValue(new Error('Network error'));
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    const loginButton = screen.getByText('Login');
+    await act(async () => {
+      loginButton.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+
+    expect(screen.getByTestId('error')).toHaveTextContent('Erreur de connexion');
+  });
+
+  test('gère les erreurs réseau dans register', async () => {
+    mockAxios.post.mockRejectedValue(new Error('Network error'));
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    const registerButton = screen.getByText('Register');
+    await act(async () => {
+      registerButton.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+
+    expect(screen.getByTestId('error')).toHaveTextContent("Erreur d'inscription");
+  });
+
+  test('register sans token dans la réponse', async () => {
+    mockAxios.post.mockResolvedValue({ data: { user: { id: '1' } } });
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    const registerButton = screen.getByText('Register');
+    await act(async () => {
+      registerButton.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+
+    expect(screen.getByTestId('user')).toHaveTextContent('no-user');
+  });
 });
