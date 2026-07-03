@@ -46,57 +46,78 @@ pipeline {
         }
 
         stage('Fetch Secrets from Vault') {
-            steps {
-                script {
-                    def dockerSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/docker
-                    """, returnStdout: true).trim()
-                    env.DOCKER_USER = sh(script: "echo '${dockerSecrets}' | jq -r '.data.data.username'", returnStdout: true).trim()
-                    env.DOCKER_PASS = sh(script: "echo '${dockerSecrets}' | jq -r '.data.data.password'", returnStdout: true).trim()
+    steps {
+        script {
+            env.DOCKER_USER = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/docker | jq -r '.data.data.username'
+            """, returnStdout: true).trim()
+            env.DOCKER_PASS = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/docker | jq -r '.data.data.password'
+            """, returnStdout: true).trim()
 
-                    def githubSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/github
-                    """, returnStdout: true).trim()
-                    env.GH_TOKEN = sh(script: "echo '${githubSecrets}' | jq -r '.data.data.token'", returnStdout: true).trim()
+            env.GH_TOKEN = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/github | jq -r '.data.data.token'
+            """, returnStdout: true).trim()
 
-                    def sonarSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/sonar
-                    """, returnStdout: true).trim()
-                    env.SONAR_TOKEN = sh(script: "echo '${sonarSecrets}' | jq -r '.data.data.token'", returnStdout: true).trim()
+            env.SONAR_TOKEN = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/sonar | jq -r '.data.data.token'
+            """, returnStdout: true).trim()
 
-                    def googleSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/google
-                    """, returnStdout: true).trim()
-                    env.GOOGLE_CLIENT_ID     = sh(script: "echo '${googleSecrets}' | jq -r '.data.data.client_id'", returnStdout: true).trim()
-                    env.GOOGLE_CLIENT_SECRET = sh(script: "echo '${googleSecrets}' | jq -r '.data.data.client_secret'", returnStdout: true).trim()
+            env.GOOGLE_CLIENT_ID = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/google | jq -r '.data.data.client_id'
+            """, returnStdout: true).trim()
+            env.GOOGLE_CLIENT_SECRET = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/google | jq -r '.data.data.client_secret'
+            """, returnStdout: true).trim()
 
-                    def dbSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/db
-                    """, returnStdout: true).trim()
-                    env.DB_HOST     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.host'", returnStdout: true).trim()
-                    env.DB_PORT     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.port'", returnStdout: true).trim()
-                    env.DB_NAME     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.name'", returnStdout: true).trim()
-                    env.DB_USER     = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.user'", returnStdout: true).trim()
-                    env.DB_PASSWORD = sh(script: "echo '${dbSecrets}' | jq -r '.data.data.password'", returnStdout: true).trim()
+            env.DB_HOST = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.host'
+            """, returnStdout: true).trim()
+            env.DB_PORT = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.port'
+            """, returnStdout: true).trim()
+            env.DB_NAME = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.name'
+            """, returnStdout: true).trim()
+            env.DB_USER = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.user'
+            """, returnStdout: true).trim()
+            env.DB_PASSWORD = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.password'
+            """, returnStdout: true).trim()
 
-                    def appSecrets = sh(script: """
-                        curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" \
-                          ${VAULT_ADDR}/v1/secret/data/taskmanager/app
-                    """, returnStdout: true).trim()
-                    env.JWT_SECRET     = sh(script: "echo '${appSecrets}' | jq -r '.data.data.jwt_secret'", returnStdout: true).trim()
-                    env.JWT_EXPIRES_IN = sh(script: "echo '${appSecrets}' | jq -r '.data.data.jwt_expires_in'", returnStdout: true).trim()
-                    env.FRONTEND_URL   = sh(script: "echo '${appSecrets}' | jq -r '.data.data.frontend_url'", returnStdout: true).trim()
-                    env.API_URL        = sh(script: "echo '${appSecrets}' | jq -r '.data.data.api_url'", returnStdout: true).trim()
+            env.JWT_SECRET = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.jwt_secret'
+            """, returnStdout: true).trim()
+            env.JWT_EXPIRES_IN = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.jwt_expires_in'
+            """, returnStdout: true).trim()
+            env.FRONTEND_URL = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.frontend_url'
+            """, returnStdout: true).trim()
+            env.API_URL = sh(script: """
+                set +x
+                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.api_url'
+            """, returnStdout: true).trim()
 
-                    echo '✅ Secrets récupérés depuis Vault'
-                }
-            }
+            echo '✅ Secrets récupérés depuis Vault (masqués dans les logs)'
         }
+    }
+}
 
         stage('Install Dependencies') {
             parallel {
