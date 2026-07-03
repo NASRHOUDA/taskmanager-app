@@ -391,18 +391,24 @@ stage('Trivy Image Scan') {
             set +e
             mkdir -p "${WORKSPACE}/zap-report"
 
-            # Pas de bind-mount du workspace : sur un Jenkins qui pilote Docker via
-            # le socket (docker-outside-of-docker), ${WORKSPACE} vu par Jenkins ne
-            # correspond pas forcément au même chemin côté hôte Docker réel -> le
-            # bind mount créait un dossier vide root/755, d'où le "Permission
-            # denied" malgré le chmod 777 (appliqué au mauvais chemin).
-            # On écrit donc le rapport DANS le conteneur puis on le récupère
-            # avec docker cp, ce qui évite complètement ce problème de mapping.
+            # Volume Docker dédié à ce build (évite les conflits de permissions
+            # entre builds et le problème de bind-mount ${WORKSPACE} qui ne
+            # correspond pas au même chemin côté hôte Docker réel)
+            docker volume create zap-wrk-${BUILD_NUMBER}
+
             docker run --name zap-scan-${BUILD_NUMBER} \
               --add-host=host.docker.internal:host-gateway \
+              -v zap-wrk-${BUILD_NUMBER}:/zap/wrk \
+              --user root \
               zaproxy/zap-stable zap-baseline.py \
               -t http://host.docker.internal/ \
-              -r zap_report.html
+              -r zap_report.html \
+              -z "-config replacer.full_list(0).description=hostheader \
+                  -config replacer.full_list(0).enabled=true \
+                  -config replacer.full_list(0).matchtype=REQ_HEADER \
+                  -config replacer.full_list(0).matchstr=Host \
+                  -config replacer.full_list(0).regex=false \
+                  -config replacer.full_list(0).replacement=localhost"
             SCAN_EXIT=$?
             echo "ZAP exit code: ${SCAN_EXIT}"
 
@@ -411,6 +417,7 @@ stage('Trivy Image Scan') {
               || echo "⚠️ Rapport ZAP introuvable (le scan a probablement échoué avant génération)."
 
             docker rm zap-scan-${BUILD_NUMBER} >/dev/null 2>&1 || true
+            docker volume rm zap-wrk-${BUILD_NUMBER} >/dev/null 2>&1 || true
             exit 0
         '''
         archiveArtifacts artifacts: 'zap-report/zap_report.html', allowEmptyArchive: true
