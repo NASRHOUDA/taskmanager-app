@@ -19,8 +19,29 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                checkout scm
+                // FIX 3 : credential explicite "github-token" au lieu du
+                // credential "dockerhub-credentials" (nom trompeur / mal réutilisé)
+                git branch: 'main',
+                    url: 'https://github.com/NASRHOUDA/taskmanager-app.git',
+                    credentialsId: 'github-token'
                 echo '📦 Code récupéré depuis GitHub'
+            }
+        }
+
+        stage('Check CI Skip') {
+            steps {
+                script {
+                    // FIX 4 (garde-fou anti-boucle) : si le dernier commit contient
+                    // [skip ci] (posé par le stage "Update Manifests"), on arrête
+                    // immédiatement ce build pour éviter une boucle infinie
+                    // déclenchée par le webhook push -> main.
+                    def lastCommitMsg = sh(script: 'git log -1 --pretty=%B', returnStdout: true).trim()
+                    if (lastCommitMsg.contains('[skip ci]')) {
+                        echo "⏭️ Commit contient [skip ci] — build arrêté pour éviter une boucle infinie (Update Manifests)."
+                        currentBuild.result = 'NOT_BUILT'
+                        error("Build volontairement stoppé : commit [skip ci] détecté.")
+                    }
+                }
             }
         }
 
@@ -147,36 +168,50 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
+                // FIX 2 : le frontend est maintenant analysé en plus du backend
                 dir('backend') {
                     sh 'npm install'
-                    
+
                     sh '''
                         npm test -- \
                             --coverage \
                             --coverageReporters=lcov \
                             --coverageReporters=text \
                             --coverageDirectory=./coverage \
-                            || echo "⚠️ Tests terminés"
+                            || echo "⚠️ Tests backend terminés"
                     '''
-                    
+                }
+
+                dir('frontend') {
                     sh '''
-                        echo "📊 Vérification des fichiers de rapport :"
-                        ls -la ./coverage/ || echo "⚠️ Coverage directory not found"
+                        CI=true npm test -- \
+                            --coverage \
+                            --coverageReporters=lcov \
+                            --coverageReporters=text \
+                            --coverageDirectory=./coverage \
+                            --passWithNoTests \
+                            || echo "⚠️ Tests frontend terminés"
                     '''
-                    
-                    withSonarQubeEnv('SonarQube') {
-                        sh '''
-                            npx sonar-scanner \
-                              -Dsonar.projectKey=taskmanager \
-                              -Dsonar.sources=. \
-                              -Dsonar.host.url=http://host.docker.internal:9000 \
-                              -Dsonar.token=${SONAR_TOKEN} \
-                              -Dsonar.exclusions=node_modules/**,**/*.test.js \
-                              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                              -Dsonar.tests=tests \
-                              -Dsonar.test.inclusions=tests/**/*.test.js
-                        '''
-                    }
+                }
+
+                sh '''
+                    echo "📊 Vérification des fichiers de rapport :"
+                    ls -la backend/coverage/ || echo "⚠️ Backend coverage directory not found"
+                    ls -la frontend/coverage/ || echo "⚠️ Frontend coverage directory not found"
+                '''
+
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                        npx sonar-scanner \
+                          -Dsonar.projectKey=taskmanager \
+                          -Dsonar.sources=backend,frontend \
+                          -Dsonar.host.url=http://host.docker.internal:9000 \
+                          -Dsonar.token=${SONAR_TOKEN} \
+                          -Dsonar.exclusions=**/node_modules/**,**/*.test.js,**/build/**,**/dist/** \
+                          -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info,frontend/coverage/lcov.info \
+                          -Dsonar.tests=backend/tests,frontend/src \
+                          -Dsonar.test.inclusions=**/*.test.js
+                    '''
                 }
             }
         }
@@ -184,9 +219,13 @@ pipeline {
         stage('SonarQube Quality Gate') {
             steps {
                 script {
+                    // FIX 1 : le Quality Gate ne bloque toujours pas le pipeline,
+                    // mais un échec est maintenant visible clairement (build UNSTABLE)
+                    // au lieu d'un simple echo perdu dans les logs.
                     def qg = waitForQualityGate()
                     if (qg.status != 'OK') {
-                        echo "⚠️ Quality Gate status: ${qg.status} - Pipeline continue"
+                        echo "⚠️ Quality Gate status: ${qg.status} - build marqué UNSTABLE, pipeline continue"
+                        currentBuild.result = 'UNSTABLE'
                     } else {
                         echo "✅ Quality Gate passed: ${qg.status}"
                     }
@@ -313,7 +352,9 @@ stage('Trivy Image Scan') {
 
             git add kubernetes/deployment-advanced.yaml
 
-            if ! git commit -m "ci: update image tags to build #${BUILD_NUMBER}"; then
+            # FIX 4 : [skip ci] dans le message de commit pour éviter que le webhook
+            # push -> main ne redéclenche ce même pipeline (boucle infinie).
+            if ! git commit -m "ci: update image tags to build #${BUILD_NUMBER} [skip ci]"; then
                 echo "⚠️ No changes to commit"
             fi
 
@@ -349,22 +390,26 @@ stage('Trivy Image Scan') {
                 sh '''
                     set +e
 
-                    # Port-forward du frontend en arrière-plan
-                    kubectl port-forward -n taskmanager svc/frontend-service 8080:80 &
-                    PF_PID=$!
-                    sleep 5
+                    # frontend-service est déjà exposé sur http://localhost (port 80)
+                    # via "minikube tunnel", lancé en parallèle. Pas besoin de
+                    # kubectl port-forward ici : ça évite le conflit avec le port
+                    # 8080 déjà utilisé par Jenkins lui-même (le conteneur ZAP
+                    # partage le network namespace de Jenkins via
+                    # --network=container:jenkins).
 
-                    # Scan ZAP baseline, partage le network namespace de Jenkins
+                    # Dossier dédié en écriture pour ZAP (le conteneur tourne en
+                    # non-root et ne peut pas écrire dans le workspace tel quel :
+                    # c'est ce qui causait les erreurs "Permission denied").
+                    mkdir -p "${WORKSPACE}/zap-report"
+                    chmod 777 "${WORKSPACE}/zap-report"
+
                     docker run --rm --network=container:jenkins \
-                      -v $(pwd):/zap/wrk:rw \
+                      -v "${WORKSPACE}/zap-report:/zap/wrk:rw" \
                       zaproxy/zap-stable zap-baseline.py \
-                      -t http://localhost:8080 \
+                      -t http://localhost/ \
                       -r zap_report.html || true
-
-                    # Nettoyage du port-forward
-                    kill $PF_PID 2>/dev/null || true
                 '''
-                archiveArtifacts artifacts: 'zap_report.html', allowEmptyArchive: true
+                archiveArtifacts artifacts: 'zap-report/zap_report.html', allowEmptyArchive: true
             }
         }
         
