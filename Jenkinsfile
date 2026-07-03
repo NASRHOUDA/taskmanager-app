@@ -237,7 +237,7 @@ pipeline {
 stage('Trivy Image Scan') {
     steps {
         script {
-            retry(3) {  // Réessaye jusqu'à 3 fois en cas d'erreur
+            retry(3) {
                 sh '''
                     set +e
                     
@@ -245,7 +245,6 @@ stage('Trivy Image Scan') {
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
                       -v /tmp/trivy-cache:/root/.cache/trivy \
-                      --timeout 30 \
                       aquasec/trivy:latest image \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
@@ -258,7 +257,6 @@ stage('Trivy Image Scan') {
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
                       -v /tmp/trivy-cache:/root/.cache/trivy \
-                      --timeout 30 \
                       aquasec/trivy:latest image \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
@@ -283,7 +281,6 @@ stage('Trivy Image Scan') {
         }
     }
 }
-
         stage('Push to Docker Hub') {
             steps {
                 sh '''
