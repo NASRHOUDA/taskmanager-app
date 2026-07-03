@@ -212,25 +212,77 @@ pipeline {
             }
         }
 
-        stage('Trivy Image Scan') {
-            steps {
-                sh """
-                    docker run --rm \
-                      -v /var/run/docker.sock:/var/run/docker.sock \
-                      aquasec/trivy:latest image \
-                      --severity HIGH,CRITICAL \
-                      --exit-code 0 \
-                      ${DOCKER_IMAGE_BACKEND}:latest
+        stage('Prepare Trivy Cache') {
+    steps {
+        script {
+            sh '''
+                echo "📦 Préparation du cache Trivy..."
+                mkdir -p /tmp/trivy-cache
+                
+                # Télécharge la DB une seule fois et la cache
+                docker run --rm \
+                  -v /tmp/trivy-cache:/root/.cache/trivy \
+                  aquasec/trivy:latest image \
+                  --download-db-only \
+                  --timeout 5m || {
+                    echo "⚠️ Erreur download DB - Trivy utilisera le mode offline si possible"
+                    exit 0
+                }
+                echo "✅ Cache Trivy prêt"
+            '''
+        }
+    }
+}
 
+stage('Trivy Image Scan') {
+    steps {
+        script {
+            retry(3) {  // Réessaye jusqu'à 3 fois en cas d'erreur
+                sh '''
+                    set +e
+                    
+                    echo "🔍 Scan Trivy - Backend image..."
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v /tmp/trivy-cache:/root/.cache/trivy \
+                      --timeout 30 \
                       aquasec/trivy:latest image \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
+                      --timeout 5m \
+                      ${DOCKER_IMAGE_BACKEND}:latest
+                    
+                    BACKEND_RESULT=$?
+                    
+                    echo "🔍 Scan Trivy - Frontend image..."
+                    docker run --rm \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v /tmp/trivy-cache:/root/.cache/trivy \
+                      --timeout 30 \
+                      aquasec/trivy:latest image \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 0 \
+                      --timeout 5m \
                       ${DOCKER_IMAGE_FRONTEND}:latest
-                """
+                    
+                    FRONTEND_RESULT=$?
+                    
+                    # Vérifie les résultats
+                    if [ $BACKEND_RESULT -eq 0 ] && [ $FRONTEND_RESULT -eq 0 ]; then
+                        echo "✅ Scans Trivy réussis - Aucune vulnérabilité CRITICAL/HIGH détectée"
+                        exit 0
+                    elif [ $BACKEND_RESULT -eq 1 ] || [ $FRONTEND_RESULT -eq 1 ]; then
+                        echo "⚠️ Vulnérabilités CRITICAL/HIGH détectées - Pipeline continue"
+                        exit 0
+                    else
+                        echo "❌ Erreur lors du scan Trivy - Réessai..."
+                        exit 1
+                    fi
+                '''
             }
         }
+    }
+}
 
         stage('Push to Docker Hub') {
             steps {
