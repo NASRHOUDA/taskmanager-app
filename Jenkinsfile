@@ -295,28 +295,30 @@ pipeline {
         }
 
         stage('DAST Security Scan') {
-            steps {
-                echo "🚀 Lancement de l'analyse dynamique (DAST) avec OWASP ZAP..."
-                // Utilisation de l'image officielle OWASP ZAP au format "Baseline" (scan rapide d'API/Web)
-                // -t spécifie l'URL de votre application déployée dans Kubernetes
-                // -r génère un rapport HTML complet
-                sh '''
-                    docker run --rm -v $(pwd):/zap/wrk:rw owasp/zap2docker-stable zap-baseline.py \
-                    -t http://votre-cluster.local \
-                    -r zap_report.html || true
-                '''
-                // Publication du rapport HTML directement dans l'interface de Jenkins
-                publishHTML([
-                    allowMissing: false,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: '.',
-                    reportFiles: 'zap_report.html',
-                    reportName: 'OWASP ZAP DAST Report',
-                    reportTitles: 'Rapport Analyse Dynamique DAST'
-                ])
-            }
-        }
+    steps {
+        echo "🚀 Lancement de l'analyse dynamique (DAST) avec OWASP ZAP..."
+        sh '''
+            set +e
+
+            # Port-forward du frontend en arrière-plan
+            kubectl port-forward -n taskmanager svc/frontend-service 8080:80 &
+            PF_PID=$!
+            sleep 5
+
+            # Scan ZAP baseline, partage le network namespace de Jenkins
+            # pour voir le port-forward en localhost:8080
+            docker run --rm --network=container:jenkins \
+              -v $(pwd):/zap/wrk:rw \
+              zaproxy/zap-stable zap-baseline.py \
+              -t http://localhost:8080 \
+              -r zap_report.html || true
+
+            # Nettoyage du port-forward
+            kill $PF_PID 2>/dev/null || true
+        '''
+        archiveArtifacts artifacts: 'zap_report.html', allowEmptyArchive: true
+    }
+}
         
     } // ← Fin du bloc stages
 
