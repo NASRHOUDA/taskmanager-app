@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 
 const generateToken = (user) => {
@@ -59,4 +60,64 @@ const getMe = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getMe };
+// Mise à jour du profil (nom, etc.) — fonctionne pour TOUS les providers
+// (local ET google), car protégé uniquement par le JWT, pas par un mot de passe.
+const updateProfile = async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ error: "Name is required" });
+    }
+
+    const user = req.user;
+    user.name = name.trim();
+    await user.save();
+
+    const { password, ...userWithoutPassword } = user.toJSON();
+    res.json({
+      message: "Profile updated successfully",
+      user: userWithoutPassword,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Changement de mot de passe — réservé aux comptes "local".
+// Les comptes Google n'ont pas de mot de passe local et ne peuvent
+// donc pas utiliser cette route (ils s'authentifient toujours via Google).
+const changePassword = async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (user.provider !== "local") {
+      return res.status(403).json({
+        error: "Password change is not available for accounts authenticated via Google. Manage your password directly in your Google account.",
+      });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current and new password are required" });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    }
+
+    const isValid = await user.validatePassword(currentPassword);
+    if (!isValid) {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.json({ message: "Password changed successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = { register, login, getMe, updateProfile, changePassword };

@@ -1,12 +1,41 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import '../styles/Profile.css';
 
+const API_BASE = process.env.REACT_APP_API_URL || '/api';
+
+async function apiCall(path, method, body) {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
 function Profile() {
-  const { user, logout } = useAuth();
+  const { user, logout, setUser } = useAuth();
   const navigate = useNavigate();
+
+  const isLocal = user?.provider !== 'google';
+
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [name, setName] = useState(user?.name || '');
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
 
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to logout?')) {
@@ -18,10 +47,53 @@ function Profile() {
 
   const handleDeleteAccount = () => {
     if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      // TODO: Implement delete account API call
       toast.success('Account deleted successfully');
       logout();
       navigate('/login');
+    }
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      toast.error('Name cannot be empty');
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const data = await apiCall('/auth/profile', 'PUT', { name });
+      if (setUser) setUser(data.user);
+      toast.success('Profile updated successfully');
+      setEditingProfile(false);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleSavePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmNewPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await apiCall('/auth/change-password', 'PUT', { currentPassword, newPassword });
+      toast.success('Password changed successfully');
+      setChangingPassword(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -29,12 +101,8 @@ function Profile() {
     <div className="profile-container">
       {/* Header */}
       <div className="profile-header">
-        <button
-          className="btn-back"
-          onClick={() => navigate('/dashboard')}
-          title="Back to Dashboard"
-        >
-          ← Back to Dashboard
+        <button className="btn-back" onClick={() => navigate('/dashboard')} title="Back to Dashboard">
+          ← Back
         </button>
         <h1>👤 User Profile</h1>
         <div></div>
@@ -63,7 +131,7 @@ function Profile() {
 
           <div className="info-group">
             <label>Provider</label>
-            <div className="info-value">
+            <div className="info-value provider-badge">
               {user?.provider === 'google' ? '🔵 Google' : '📧 Email'}
             </div>
           </div>
@@ -78,38 +146,118 @@ function Profile() {
           <div className="info-group">
             <label>Member Since</label>
             <div className="info-value">
-              {user?.createdAt
-                ? new Date(user.createdAt).toLocaleDateString()
-                : 'N/A'}
+              {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
             </div>
           </div>
         </div>
 
+        {/* Edit Profile inline form */}
+        {editingProfile && (
+          <form className="inline-form" onSubmit={handleSaveProfile}>
+            <h3>Edit profile</h3>
+            <label>Full name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              required
+            />
+            <div className="inline-form-actions">
+              <button type="submit" className="btn-save" disabled={savingProfile}>
+                {savingProfile ? 'Saving…' : 'Save changes'}
+              </button>
+              <button
+                type="button"
+                className="btn-cancel-inline"
+                onClick={() => { setEditingProfile(false); setName(user?.name || ''); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Change Password inline form — local accounts only */}
+        {changingPassword && isLocal && (
+          <form className="inline-form" onSubmit={handleSavePassword}>
+            <h3>Change password</h3>
+            <label>Current password</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+            />
+            <label>New password</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Min. 6 characters"
+              required
+            />
+            <label>Confirm new password</label>
+            <input
+              type="password"
+              value={confirmNewPassword}
+              onChange={(e) => setConfirmNewPassword(e.target.value)}
+              placeholder="Repeat new password"
+              required
+            />
+            <div className="inline-form-actions">
+              <button type="submit" className="btn-save" disabled={savingPassword}>
+                {savingPassword ? 'Saving…' : 'Update password'}
+              </button>
+              <button
+                type="button"
+                className="btn-cancel-inline"
+                onClick={() => {
+                  setChangingPassword(false);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmNewPassword('');
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
         {/* Actions */}
-        <div className="profile-actions">
-          <button
-            className="btn-edit"
-            disabled
-            title="Coming soon"
-          >
-            ✏️ Edit Profile
-          </button>
-          <button
-            className="btn-change-password"
-            disabled
-            title="Coming soon"
-          >
-            🔒 Change Password
-          </button>
-        </div>
+        {!editingProfile && !changingPassword && (
+          <div className="profile-actions">
+            <button className="btn-edit" onClick={() => setEditingProfile(true)}>
+              ✏️ Edit Profile
+            </button>
+
+            {isLocal ? (
+              <button className="btn-change-password" onClick={() => setChangingPassword(true)}>
+                🔒 Change Password
+              </button>
+            ) : (
+              <>
+                <button className="btn-change-password" disabled title="Not available for Google accounts">
+                  🔒 Change Password
+                </button>
+                <div className="google-note">
+                  Your account uses Google Sign-In, so there's no password to manage here — head to your{' '}
+                  <a href="https://myaccount.google.com/security" target="_blank" rel="noreferrer">
+                    Google Account settings
+                  </a>{' '}
+                  if you need to update anything on that side.
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Danger Zone */}
         <div className="danger-zone">
           <h3>⚠️ Danger Zone</h3>
-          <button
-            className="btn-logout"
-            onClick={handleLogout}
-          >
+          <button className="btn-logout" onClick={handleLogout}>
             🚪 Logout
           </button>
           <button

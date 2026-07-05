@@ -8,7 +8,7 @@ import '../styles/Dashboard.css';
 function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  
+
   const [tasks, setTasks] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -19,10 +19,9 @@ function Dashboard() {
     title: '',
     description: '',
     priority: 'medium',
-    dueDate: '',
+    deadline: '',
   });
 
-  // Charger les tâches et statistiques
   useEffect(() => {
     loadTasks();
     loadStats();
@@ -73,7 +72,8 @@ function Dashboard() {
       title: task.title,
       description: task.description || '',
       priority: task.priority,
-      dueDate: task.dueDate ? task.dueDate.split('T')[0] : '',
+      // datetime-local attend le format "YYYY-MM-DDTHH:mm"
+      deadline: task.deadline ? task.deadline.slice(0, 16) : '',
     });
     setShowForm(true);
   };
@@ -103,7 +103,7 @@ function Dashboard() {
   };
 
   const resetForm = () => {
-    setFormData({ title: '', description: '', priority: 'medium', dueDate: '' });
+    setFormData({ title: '', description: '', priority: 'medium', deadline: '' });
     setEditingTask(null);
     setShowForm(false);
   };
@@ -116,11 +116,11 @@ function Dashboard() {
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'high':
-        return '#ff4444';
+        return '#e53935';
       case 'medium':
-        return '#ffaa00';
+        return '#fb8c00';
       case 'low':
-        return '#44aa44';
+        return '#43a047';
       default:
         return '#888';
     }
@@ -137,24 +137,30 @@ function Dashboard() {
     }
   };
 
+  const isOverdue = (task) => {
+    return task.deadline && task.status !== 'done' && new Date(task.deadline) < new Date();
+  };
+
   return (
     <div className="dashboard-container">
       {/* Header */}
       <div className="dashboard-header">
-        <h1>📋 TaskManager Dashboard</h1>
+        <div className="dashboard-header-title">
+          <div className="dashboard-logo-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="7" height="7" rx="1.5" fill="#fff" opacity="0.95"/>
+              <rect x="14" y="3" width="7" height="7" rx="1.5" fill="#fff" opacity="0.6"/>
+              <rect x="3" y="14" width="7" height="7" rx="1.5" fill="#fff" opacity="0.6"/>
+              <rect x="14" y="14" width="7" height="7" rx="1.5" fill="#fff" opacity="0.3"/>
+            </svg>
+          </div>
+          <h1>Task Manager Dashboard</h1>
+        </div>
         <div className="header-actions">
-          <button
-            className="btn-profile"
-            onClick={() => navigate('/profile')}
-            title="Profile"
-          >
+          <button className="btn-profile" onClick={() => navigate('/profile')} title="Profile">
             👤 Profile
           </button>
-          <button
-            className="btn-logout"
-            onClick={handleLogout}
-            title="Logout"
-          >
+          <button className="btn-logout" onClick={handleLogout} title="Logout">
             🚪 Logout
           </button>
         </div>
@@ -162,7 +168,7 @@ function Dashboard() {
 
       {/* Welcome */}
       <div className="welcome-section">
-        <p>Welcome, <strong>{user?.name || user?.email}</strong>! 👋</p>
+        Welcome, <strong>{user?.name || user?.email}</strong>! 👋
       </div>
 
       {/* Stats Cards */}
@@ -204,10 +210,11 @@ function Dashboard() {
 
       {/* Task Form */}
       {showForm && (
-        <div className="task-form-container">
+        <div className="task-form-container" onClick={(e) => e.target === e.currentTarget && resetForm()}>
           <div className="task-form">
             <h2>{editingTask ? 'Edit Task' : 'Create New Task'}</h2>
             <form onSubmit={handleCreateTask}>
+              <label>Title</label>
               <input
                 type="text"
                 placeholder="Task title"
@@ -215,6 +222,7 @@ function Dashboard() {
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 required
               />
+              <label>Description</label>
               <textarea
                 placeholder="Description (optional)"
                 value={formData.description}
@@ -222,29 +230,34 @@ function Dashboard() {
                 rows="3"
               />
               <div className="form-row">
-                <select
-                  value={formData.priority}
-                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                >
-                  <option value="low">🟢 Low Priority</option>
-                  <option value="medium">🟡 Medium Priority</option>
-                  <option value="high">🔴 High Priority</option>
-                </select>
-                <input
-                  type="date"
-                  value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                />
+                <div>
+                  <label>Priority</label>
+                  <select
+                    value={formData.priority}
+                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  >
+                    <option value="low">🟢 Low Priority</option>
+                    <option value="medium">🟡 Medium Priority</option>
+                    <option value="high">🔴 High Priority</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Deadline</label>
+                  <input
+                    type="datetime-local"
+                    value={formData.deadline}
+                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                  />
+                </div>
               </div>
+              <p className="deadline-hint">
+                ⏰ If the deadline passes before the task is marked "Done", you'll get an email alert automatically.
+              </p>
               <div className="form-actions">
                 <button type="submit" className="btn-submit">
                   {editingTask ? 'Update Task' : 'Create Task'}
                 </button>
-                <button
-                  type="button"
-                  className="btn-cancel"
-                  onClick={resetForm}
-                >
+                <button type="button" className="btn-cancel" onClick={resetForm}>
                   Cancel
                 </button>
               </div>
@@ -283,56 +296,59 @@ function Dashboard() {
           <p className="no-tasks">No tasks found. Create one to get started! ✨</p>
         ) : (
           <div className="tasks-grid">
-            {tasks.map((task) => (
-              <div key={task.id} className="task-card">
-                <div className="task-header">
-                  <h3>{task.title}</h3>
-                  <span
-                    className="task-priority"
-                    style={{ backgroundColor: getPriorityColor(task.priority) }}
-                    title={task.priority}
-                  >
-                    {task.priority.toUpperCase()}
-                  </span>
-                </div>
-                {task.description && (
-                  <p className="task-description">{task.description}</p>
-                )}
-                <div className="task-meta">
-                  {task.dueDate && (
-                    <span className="task-date">
-                      📅 {new Date(task.dueDate).toLocaleDateString()}
+            {tasks.map((task) => {
+              const overdue = isOverdue(task);
+              return (
+                <div key={task.id} className={`task-card ${overdue ? 'overdue' : ''}`}>
+                  <div className="task-header">
+                    <h3>{task.title}</h3>
+                    <span
+                      className="task-priority"
+                      style={{ backgroundColor: getPriorityColor(task.priority) }}
+                      title={task.priority}
+                    >
+                      {task.priority.toUpperCase()}
                     </span>
+                  </div>
+                  {task.description && (
+                    <p className="task-description">{task.description}</p>
                   )}
-                  <span className="task-status">
-                    {getStatusIcon(task.status)} {task.status.replace('-', ' ')}
-                  </span>
+                  <div className="task-meta">
+                    {task.deadline && (
+                      <span className={`task-deadline ${overdue ? 'overdue-tag' : ''}`}>
+                        {overdue ? '⚠️ Overdue —' : '⏰'} {new Date(task.deadline).toLocaleString()}
+                      </span>
+                    )}
+                    <span className="task-status">
+                      {getStatusIcon(task.status)} {task.status.replace('-', ' ')}
+                    </span>
+                  </div>
+                  <div className="task-actions">
+                    <button
+                      className="btn-status"
+                      onClick={() => handleToggleStatus(task)}
+                      title="Change status"
+                    >
+                      {task.status === 'done' ? '↩️ Reopen' : '→ Next'}
+                    </button>
+                    <button
+                      className="btn-edit"
+                      onClick={() => handleEditTask(task)}
+                      title="Edit task"
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      className="btn-delete"
+                      onClick={() => handleDeleteTask(task.id)}
+                      title="Delete task"
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="task-actions">
-                  <button
-                    className="btn-status"
-                    onClick={() => handleToggleStatus(task)}
-                    title="Change status"
-                  >
-                    {task.status === 'done' ? '↩️ Reopen' : '→ Next'}
-                  </button>
-                  <button
-                    className="btn-edit"
-                    onClick={() => handleEditTask(task)}
-                    title="Edit task"
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button
-                    className="btn-delete"
-                    onClick={() => handleDeleteTask(task.id)}
-                    title="Delete task"
-                  >
-                    🗑️ Delete
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

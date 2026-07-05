@@ -30,4 +30,6 @@ router.get('/google/callback',
   }
 );
 
+router.put('/profile', authMiddleware, authController.updateProfile);
+router.put('/change-password', authMiddleware, authController.changePassword);
 module.exports = router;

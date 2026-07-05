@@ -1,49 +1,38 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useState, useContext } from "react";
 import api from "../services/api";
 import { decodeJWT } from "../utils/jwt";
 
 const AuthContext = createContext();
-
 export const useAuth = () => useContext(AuthContext);
 
+// Extraction et sauvegarde du token AVANT le premier rendu (synchrone),
+// pour éviter la race condition avec la redirection /home -> /dashboard
+// (les effects des enfants s'exécutent avant ceux des parents).
+const extractAndStoreToken = () => {
+  const params = new URLSearchParams(window.location.search);
+  let token = params.get("token");
+  if (!token) {
+    token = localStorage.getItem("token");
+  }
+  if (token) {
+    localStorage.setItem("token", token);
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    const decoded = decodeJWT(token);
+    if (decoded) {
+      return {
+        id: decoded.id,
+        email: decoded.email,
+        name: decoded.email.split('@')[0]
+      };
+    }
+  }
+  return null;
+};
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(() => extractAndStoreToken());
+  const [loading] = useState(false);
   const [error, setError] = useState(null);
-
-  useEffect(() => {
-    // 1️⃣ Vérifie si le token est dans l'URL
-    const params = new URLSearchParams(window.location.search);
-    let token = params.get("token");
-    
-    console.log("🔍 Token from URL:", token);
-
-    // 2️⃣ Si pas dans URL, cherche dans localStorage
-    if (!token) {
-      token = localStorage.getItem("token");
-      console.log("🔍 Token from localStorage:", token);
-    }
-
-    // 3️⃣ Si token trouvé, décoder et sauvegarder
-    if (token) {
-      localStorage.setItem("token", token);
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-      
-      const decoded = decodeJWT(token);
-      console.log("📦 Decoded JWT:", decoded);
-      
-      if (decoded) {
-        const userData = {
-          id: decoded.id,
-          email: decoded.email,
-          name: decoded.email.split('@')[0]
-        };
-        console.log("👤 User object set to:", userData);
-        setUser(userData);
-      }
-    }
-    setLoading(false);
-  }, []);
 
   const login = async (email, password) => {
     try {

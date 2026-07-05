@@ -1,0 +1,16 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: taskmanager-db
+  namespace: taskmanager
+spec:
+  instances: 2
+  enableSuperuserAccess: true
+  superuserSecret:
+    name: postgres-superuser-secret
+  bootstrap:
+    initdb:
+      database: taskmanager
+      owner: postgres
+  storage:
+    size: 1Gi
