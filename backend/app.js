@@ -4,6 +4,8 @@ const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const passport = require("passport");
 const authRoutes = require("./routes/auth.routes");
+const taskRoutes = require("./routes/task.routes");
+const errorHandler = require("./middleware/errorHandler.middleware");
 require("./config/passport");
 
 const app = express();
@@ -33,7 +35,10 @@ app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());
+
+// Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/tasks", taskRoutes);
 
 app.get("/health", (req, res) => {
   res.json({ status: "OK", timestamp: new Date() });
@@ -43,5 +48,8 @@ app.get('/metrics', async (req, res) => {
   res.set('Content-Type', client.register.contentType);
   res.end(await client.register.metrics());
 });
+
+// Error handling middleware (MUST be last)
+app.use(errorHandler);
 
 module.exports = app;

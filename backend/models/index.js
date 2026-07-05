@@ -1,6 +1,5 @@
 const { Sequelize } = require("sequelize");
 const dotenv = require("dotenv");
-
 dotenv.config();
 
 const sequelize = new Sequelize(
@@ -15,5 +14,10 @@ const sequelize = new Sequelize(
 );
 
 const User = require("./User")(sequelize);
+const Task = require("./Task")(sequelize);
 
-module.exports = { sequelize, User };
+// Associations
+User.hasMany(Task, { foreignKey: "userId", onDelete: "CASCADE" });
+Task.belongsTo(User, { foreignKey: "userId" });
+
+module.exports = { sequelize, User, Task };
