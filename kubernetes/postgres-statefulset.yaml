@@ -25,6 +25,58 @@ spec:
                 matchLabels:
                   app: postgres
               topologyKey: kubernetes.io/hostname
+      initContainers:
+      - name: init-replica
+        image: postgres:15-alpine
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: REPLICATION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: REPLICATION_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        command:
+        - bash
+        - -c
+        - |
+          set -e
+          ORDINAL="${POD_NAME##*-}"
+
+          if [ "$ORDINAL" = "0" ]; then
+            echo "[$POD_NAME] Primary node - aucune init de replica necessaire."
+            exit 0
+          fi
+
+          if [ -s "$PGDATA/PG_VERSION" ]; then
+            echo "[$POD_NAME] Data directory deja initialisee - on ne re-clone pas."
+            exit 0
+          fi
+
+          echo "[$POD_NAME] Replica node - clonage depuis postgres-0 via pg_basebackup..."
+          mkdir -p "$PGDATA"
+          export PGPASSWORD="$REPLICATION_PASSWORD"
+
+          echo "[$POD_NAME] Attente que postgres-0 soit pret..."
+          until pg_isready -h postgres-0.postgres-headless -p 5432 -U replicator >/dev/null 2>&1; do
+            sleep 2
+          done
+
+          pg_basebackup -h postgres-0.postgres-headless -D "$PGDATA" -U replicator -v -P --wal-method=stream
+
+          touch "$PGDATA/standby.signal"
+          echo "primary_conninfo = 'host=postgres-0.postgres-headless port=5432 user=replicator password=$REPLICATION_PASSWORD application_name=postgres-1'" >> "$PGDATA/postgresql.auto.conf"
+
+          chmod 700 "$PGDATA"
+          chown -R postgres:postgres "$PGDATA"
+          echo "[$POD_NAME] Base backup termine, replica configuree."
       containers:
       - name: postgres
         image: postgres:15-alpine
