@@ -87,6 +87,21 @@ spec:
           value: http://localhost
         - name: API_URL
           value: http://localhost/api
+        - name: EMAIL_USER
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: EMAIL_USER
+        - name: EMAIL_APP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: EMAIL_APP_PASSWORD
+        - name: ALERT_EMAIL_TO
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: ALERT_EMAIL_TO
         resources:
           requests:
             memory: "256Mi"
