@@ -22,7 +22,8 @@ const extractAndStoreToken = () => {
       return {
         id: decoded.id,
         email: decoded.email,
-        name: decoded.email.split('@')[0]
+        name: decoded.email.split('@')[0],
+        provider: decoded.provider
       };
     }
   }

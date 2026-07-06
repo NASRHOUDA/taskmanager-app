@@ -19,7 +19,7 @@ router.get('/google/callback',
     console.log('✅ Auth success for:', req.user.email);
     const jwt = require('jsonwebtoken');
     const token = jwt.sign(
-      { id: req.user.id, email: req.user.email },
+      { id: req.user.id, email: req.user.email, provider: req.user.provider },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );

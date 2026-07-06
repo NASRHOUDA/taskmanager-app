@@ -45,7 +45,7 @@ spec:
             app: backend
       containers:
       - name: backend
-        image: houdanasr/taskmanager-backend:test10
+        image: houdanasr/taskmanager-backend:82
         ports:
         - containerPort: 5000
         env:
@@ -54,7 +54,7 @@ spec:
         - name: PORT
           value: "5000"
         - name: DB_HOST
-          value: taskmanager-db-rw
+          value: postgres-service
         - name: DB_PORT
           value: "5432"
         - name: DB_NAME
@@ -171,7 +171,7 @@ spec:
             app: frontend
       containers:
       - name: frontend
-        image: houdanasr/taskmanager-frontend:test10
+        image: houdanasr/taskmanager-frontend:82
         ports:
         - containerPort: 80
         resources:

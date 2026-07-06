@@ -41,7 +41,7 @@ async function sendDeadlineExceededEmail(task, user) {
 
   await transporter.sendMail({
     from: `"Task Manager" <${process.env.EMAIL_USER}>`,
-    to: process.env.ALERT_EMAIL_TO || "houdanasr414@gmail.com",
+    to: user.email,
     subject: `⏰ Délai dépassé : ${task.title}`,
     html,
   });

@@ -7,7 +7,7 @@ class TaskService {
       throw new Error("Task title is required");
     }
 
-    if (data.dueDate && new Date(data.dueDate) < new Date()) {
+    if (data.deadline && new Date(data.deadline) < new Date()) {
       throw new Error("Due date cannot be in the past");
     }
 
@@ -16,7 +16,7 @@ class TaskService {
       title: data.title.trim(),
       description: data.description?.trim() || null,
       priority: data.priority || "medium",
-      dueDate: data.dueDate || null,
+      deadline: data.deadline || null,
       status: "todo",
     });
   }
@@ -51,11 +51,11 @@ class TaskService {
     if (data.priority && ["low", "medium", "high"].includes(data.priority)) {
       updateData.priority = data.priority;
     }
-    if (data.dueDate) {
-      if (new Date(data.dueDate) < new Date()) {
+    if (data.deadline) {
+      if (new Date(data.deadline) < new Date()) {
         throw new Error("Due date cannot be in the past");
       }
-      updateData.dueDate = data.dueDate;
+      updateData.deadline = data.deadline;
     }
 
     return await TaskRepository.update(taskId, userId, updateData);
