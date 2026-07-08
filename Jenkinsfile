@@ -423,7 +423,6 @@ stage('Trivy Image Scan') {
             docker volume create zap-wrk-${BUILD_NUMBER}
 
             docker run --name zap-scan-${BUILD_NUMBER} \
-              --add-host=host.docker.internal:host-gateway \
               -v zap-wrk-${BUILD_NUMBER}:/zap/wrk \
               --user root \
               zaproxy/zap-stable zap-baseline.py \
