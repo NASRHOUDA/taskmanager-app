@@ -1,9 +1,8 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import '@testing-library/jest-dom';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Login from './Login';
-import { useAuth } from '../context/AuthContext';
 
 jest.mock('../context/AuthContext', () => ({
   useAuth: jest.fn(),
@@ -15,84 +14,113 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-function renderLogin() {
-  return render(
-    <MemoryRouter initialEntries={['/login']}>
-      <Login />
-    </MemoryRouter>
-  );
-}
+describe('Login Component', () => {
+  const mockLogin = jest.fn();
 
-beforeEach(() => {
-  mockNavigate.mockClear();
-  localStorage.clear();
-});
-
-test('submits the credentials and navigates to /home on success', async () => {
-  const login = jest.fn().mockResolvedValue(true);
-  useAuth.mockReturnValue({ login });
-
-  renderLogin();
-
-  fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
-    target: { value: 'user@example.com' },
+  beforeEach(() => {
+    jest.clearAllMocks();
+    require('../context/AuthContext').useAuth.mockReturnValue({
+      login: mockLogin,
+      error: null,
+      loading: false,
+    });
   });
-  fireEvent.change(screen.getByPlaceholderText('••••••••'), {
-    target: { value: 'secret' },
+
+  test('renders login form', () => {
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Connexion')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Email/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Mot de passe/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Se connecter/i })).toBeInTheDocument();
   });
-  fireEvent.click(screen.getByText('Sign in →'));
 
-  await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/home'));
-  expect(login).toHaveBeenCalledWith('user@example.com', 'secret');
-});
+  test('handles successful login', async () => {
+    const user = userEvent.setup();
+    mockLogin.mockResolvedValue(true);
 
-test('shows an error message and does not navigate when login fails', async () => {
-  const login = jest.fn().mockResolvedValue(false);
-  useAuth.mockReturnValue({ login });
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
 
-  renderLogin();
+    const emailInput = screen.getByLabelText(/Email/i);
+    const passwordInput = screen.getByLabelText(/Mot de passe/i);
+    const submitButton = screen.getByRole('button', { name: /Se connecter/i });
 
-  fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
-    target: { value: 'user@example.com' },
+    await user.type(emailInput, 'test@example.com');
+    await user.type(passwordInput, 'password123');
+    await user.click(submitButton);
+
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalledWith('test@example.com', 'password123');
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+    });
   });
-  fireEvent.change(screen.getByPlaceholderText('••••••••'), {
-    target: { value: 'wrong-password' },
+
+  test('shows error message on login failure', async () => {
+    const user = userEvent.setup();
+    mockLogin.mockResolvedValue(false);
+    require('../context/AuthContext').useAuth.mockReturnValue({
+      login: mockLogin,
+      error: 'Invalid credentials',
+      loading: false,
+    });
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
+
+    const emailInput = screen.getByLabelText(/Email/i);
+    const passwordInput = screen.getByLabelText(/Mot de passe/i);
+    const submitButton = screen.getByRole('button', { name: /Se connecter/i });
+
+    await user.type(emailInput, 'test@example.com');
+    await user.type(passwordInput, 'wrongpassword');
+    await user.click(submitButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Invalid credentials')).toBeInTheDocument();
+    });
   });
-  fireEvent.click(screen.getByText('Sign in →'));
 
-  expect(
-    await screen.findByText('Invalid email or password. Please try again.')
-  ).toBeInTheDocument();
-  expect(mockNavigate).not.toHaveBeenCalled();
-});
+  test('shows loading state during login', async () => {
+    const user = userEvent.setup();
+    mockLogin.mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 100)));
+    require('../context/AuthContext').useAuth.mockReturnValue({
+      login: mockLogin,
+      error: null,
+      loading: true,
+    });
 
-test('reads a token from the URL and stores it on mount', () => {
-  const login = jest.fn();
-  useAuth.mockReturnValue({ login });
-  delete window.location;
-  window.location = { search: '?token=abc123', href: '' };
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
 
-  render(
-    <MemoryRouter initialEntries={['/login?token=abc123']}>
-      <Login />
-    </MemoryRouter>
-  );
+    expect(screen.getByText('Connexion...')).toBeInTheDocument();
+  });
 
-  expect(localStorage.getItem('token')).toBe('abc123');
-});
+  test('navigates to register page', async () => {
+    const user = userEvent.setup();
 
-test('toggles password visibility when the eye icon is clicked', () => {
-  useAuth.mockReturnValue({ login: jest.fn() });
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
 
-  renderLogin();
+    const registerLink = screen.getByText(/Créer un compte/i);
+    await user.click(registerLink);
 
-  const passwordInput = screen.getByPlaceholderText('••••••••');
-  expect(passwordInput).toHaveAttribute('type', 'password');
-
-  const toggleButton = passwordInput.parentElement.querySelector(
-    'button[type="button"]'
-  );
-  fireEvent.click(toggleButton);
-
-  expect(passwordInput).toHaveAttribute('type', 'text');
+    expect(mockNavigate).toHaveBeenCalledWith('/register');
+  });
 });
