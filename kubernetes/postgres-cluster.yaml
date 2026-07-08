@@ -5,6 +5,11 @@ metadata:
   namespace: taskmanager
 spec:
   instances: 2
+  inheritedMetadata:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9187"
+      prometheus.io/path: "/metrics"
   enableSuperuserAccess: true
   superuserSecret:
     name: postgres-superuser-secret
