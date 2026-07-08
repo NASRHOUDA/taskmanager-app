@@ -34,10 +34,12 @@ const login = async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({ where: { email } });
     if (!user) {
+      console.error(`Auth failed: invalid credentials for email ${email} (user not found)`);
       return res.status(401).json({ error: "Invalid credentials" });
     }
     const isValid = await user.validatePassword(password);
     if (!isValid) {
+      console.error(`Auth failed: invalid credentials for email ${email} (wrong password)`);
       return res.status(401).json({ error: "Invalid credentials" });
     }
     const token = generateToken(user);
