@@ -222,7 +222,7 @@ function Dashboard() {
           aria-label="Close form"
           onClick={(e) => e.target === e.currentTarget && resetForm()}
         >
-          <div className="task-form" onClick={(e) => e.stopPropagation()}>
+          <div className="task-form">
             <h2>{editingTask ? 'Edit Task' : 'Create New Task'}</h2>
             <form onSubmit={handleCreateTask}>
               <label htmlFor="task-title">Title</label>
