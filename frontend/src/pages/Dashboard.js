@@ -272,7 +272,7 @@ function Dashboard() {
           value={filter.status}
           onChange={(e) => setFilter({ ...filter, status: e.target.value })}
         >
-          <option value="">All Status</option>
+          <option value="">All Status of task </option>
           <option value="todo">📌 To Do</option>
           <option value="in-progress">⏳ In Progress</option>
           <option value="done">✅ Done</option>
