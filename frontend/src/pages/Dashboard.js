@@ -216,16 +216,13 @@ function Dashboard() {
 
       {/* Task Form */}
       {showForm && (
-        <div
+        <button
+          type="button"
           className="task-form-container"
-          role="button"
-          tabIndex={0}
+          aria-label="Close form"
           onClick={(e) => e.target === e.currentTarget && resetForm()}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape' || e.key === 'Enter') resetForm();
-          }}
         >
-          <div className="task-form">
+          <div className="task-form" role="presentation" onClick={(e) => e.stopPropagation()}>
             <h2>{editingTask ? 'Edit Task' : 'Create New Task'}</h2>
             <form onSubmit={handleCreateTask}>
               <label htmlFor="task-title">Title</label>
@@ -281,7 +278,7 @@ function Dashboard() {
               </div>
             </form>
           </div>
-        </div>
+        </button>
       )}
 
       {/* Filters */}
@@ -308,11 +305,19 @@ function Dashboard() {
 
       {/* Tasks List */}
       <div className="tasks-container">
-        {loading ? (
-          <p>Loading tasks...</p>
-        ) : tasks.length === 0 ? (
-          <p className="no-tasks">No tasks found. Create one to get started! ✨</p>
-        ) : (
+        {renderTasksList()}
+      </div>
+    </div>
+  );
+
+  function renderTasksList() {
+    if (loading) {
+      return <p>Loading tasks...</p>;
+    }
+    if (tasks.length === 0) {
+      return <p className="no-tasks">No tasks found. Create one to get started! ✨</p>;
+    }
+    return (
           <div className="tasks-grid">
             {tasks.map((task) => {
               const overdue = isOverdue(task);
@@ -367,11 +372,9 @@ function Dashboard() {
                 </div>
               );
             })}
-          </div>
-        )}
       </div>
-    </div>
-  );
+    );
+  }
 }
 
 export default Dashboard;

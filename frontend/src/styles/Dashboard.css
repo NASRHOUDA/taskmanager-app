@@ -197,6 +197,10 @@
 
 /* Task Form Modal */
 .task-form-container {
+  border: none;
+  margin: 0;
+  font: inherit;
+  cursor: default;
   position: fixed;
   inset: 0;
   background: rgba(17, 17, 17, 0.5);
