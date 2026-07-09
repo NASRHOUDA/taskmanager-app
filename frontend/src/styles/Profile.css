@@ -39,7 +39,7 @@
 }
 
 .btn-back {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.15);
   color: #fff;
   border: 1.5px solid rgba(255, 255, 255, 0.3);
   padding: 10px 18px;
@@ -77,7 +77,7 @@
 .avatar-placeholder {
   width: 104px;
   height: 104px;
-  background: linear-gradient(135deg, #4f6ef7 0%, #3a56d4 100%);
+  background: linear-gradient(135deg, #3f5be0 0%, #3a56d4 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -109,7 +109,7 @@
   border-bottom: none;
 }
 
-.info-group label {
+.info-group .info-label {
   display: block;
   font-size: 11px;
   color: var(--tm-text-muted);

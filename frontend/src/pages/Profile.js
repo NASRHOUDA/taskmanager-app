@@ -38,7 +38,7 @@ function Profile() {
   const [savingPassword, setSavingPassword] = useState(false);
 
   const handleLogout = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
+    if (globalThis.confirm('Are you sure you want to logout?')) {
       logout();
       toast.success('Logged out successfully');
       navigate('/login');
@@ -46,7 +46,7 @@ function Profile() {
   };
 
   const handleDeleteAccount = () => {
-    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+    if (globalThis.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
       toast.success('Account deleted successfully');
       logout();
       navigate('/login');
@@ -120,31 +120,31 @@ function Profile() {
         {/* User Info */}
         <div className="profile-info">
           <div className="info-group">
-            <label>Name</label>
+            <span className="info-label">Name</span>
             <div className="info-value">{user?.name || 'N/A'}</div>
           </div>
 
           <div className="info-group">
-            <label>Email</label>
+            <span className="info-label">Email</span>
             <div className="info-value">{user?.email || 'N/A'}</div>
           </div>
 
           <div className="info-group">
-            <label>Provider</label>
+            <span className="info-label">Provider</span>
             <div className="info-value provider-badge">
               {user?.provider === 'google' ? '🔵 Google' : '📧 Email'}
             </div>
           </div>
 
           <div className="info-group">
-            <label>Account Status</label>
+            <span className="info-label">Account Status</span>
             <div className="info-value">
               <span className="status-badge active">✅ Active</span>
             </div>
           </div>
 
           <div className="info-group">
-            <label>Member Since</label>
+            <span className="info-label">Member Since</span>
             <div className="info-value">
               {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
             </div>
@@ -155,8 +155,9 @@ function Profile() {
         {editingProfile && (
           <form className="inline-form" onSubmit={handleSaveProfile}>
             <h3>Edit profile</h3>
-            <label>Full name</label>
+            <label htmlFor="profile-name">Full name</label>
             <input
+              id="profile-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -182,24 +183,27 @@ function Profile() {
         {changingPassword && isLocal && (
           <form className="inline-form" onSubmit={handleSavePassword}>
             <h3>Change password</h3>
-            <label>Current password</label>
+            <label htmlFor="current-password">Current password</label>
             <input
+              id="current-password"
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               placeholder="••••••••"
               required
             />
-            <label>New password</label>
+            <label htmlFor="new-password">New password</label>
             <input
+              id="new-password"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Min. 6 characters"
               required
             />
-            <label>Confirm new password</label>
+            <label htmlFor="confirm-new-password">Confirm new password</label>
             <input
+              id="confirm-new-password"
               type="password"
               value={confirmNewPassword}
               onChange={(e) => setConfirmNewPassword(e.target.value)}

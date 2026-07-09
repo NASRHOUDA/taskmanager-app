@@ -21,7 +21,7 @@ const validateCreateTask = (req, res, next) => {
     return res.status(400).json({ error: "Priority must be low, medium, or high" });
   }
 
-  if (dueDate && isNaN(Date.parse(dueDate))) {
+  if (dueDate && Number.isNaN(Date.parse(dueDate))) {
     console.warn(`Validation failed: Invalid due date format`);
     return res.status(400).json({ error: "Invalid due date format" });
   }
@@ -47,7 +47,7 @@ const validateUpdateTask = (req, res, next) => {
     return res.status(400).json({ error: "Priority must be low, medium, or high" });
   }
 
-  if (dueDate && isNaN(Date.parse(dueDate))) {
+  if (dueDate && Number.isNaN(Date.parse(dueDate))) {
     console.warn(`Validation failed: Invalid due date format`);
     return res.status(400).json({ error: "Invalid due date format" });
   }

@@ -79,7 +79,7 @@ function Dashboard() {
   };
 
   const handleDeleteTask = async (taskId) => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
+    if (globalThis.confirm('Are you sure you want to delete this task?')) {
       try {
         await taskService.deleteTask(taskId);
         toast.success('Task deleted successfully');
@@ -91,8 +91,14 @@ function Dashboard() {
     }
   };
 
+  const getNextStatus = (currentStatus) => {
+    if (currentStatus === 'todo') return 'in-progress';
+    if (currentStatus === 'in-progress') return 'done';
+    return 'todo';
+  };
+
   const handleToggleStatus = async (task) => {
-    const nextStatus = task.status === 'todo' ? 'in-progress' : task.status === 'in-progress' ? 'done' : 'todo';
+    const nextStatus = getNextStatus(task.status);
     try {
       await taskService.updateTask(task.id, { status: nextStatus });
       loadTasks();
@@ -210,20 +216,30 @@ function Dashboard() {
 
       {/* Task Form */}
       {showForm && (
-        <div className="task-form-container" onClick={(e) => e.target === e.currentTarget && resetForm()}>
+        <div
+          className="task-form-container"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => e.target === e.currentTarget && resetForm()}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' || e.key === 'Enter') resetForm();
+          }}
+        >
           <div className="task-form">
             <h2>{editingTask ? 'Edit Task' : 'Create New Task'}</h2>
             <form onSubmit={handleCreateTask}>
-              <label>Title</label>
+              <label htmlFor="task-title">Title</label>
               <input
+                id="task-title"
                 type="text"
                 placeholder="Task title"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 required
               />
-              <label>Description</label>
+              <label htmlFor="task-description">Description</label>
               <textarea
+                id="task-description"
                 placeholder="Description (optional)"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -231,8 +247,9 @@ function Dashboard() {
               />
               <div className="form-row">
                 <div>
-                  <label>Priority</label>
+                  <label htmlFor="task-priority">Priority</label>
                   <select
+                    id="task-priority"
                     value={formData.priority}
                     onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
                   >
@@ -242,8 +259,9 @@ function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label>Deadline</label>
+                  <label htmlFor="task-deadline">Deadline</label>
                   <input
+                    id="task-deadline"
                     type="datetime-local"
                     value={formData.deadline}
                     onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
