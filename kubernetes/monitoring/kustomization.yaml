@@ -5,3 +5,4 @@ resources:
   - grafana-deployment.yaml
   - configmaps.yaml
   - alertmanager-secret.yaml
+  - loki-values.yaml
