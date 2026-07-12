@@ -48,6 +48,10 @@ data:
   values.yaml: |
     persistence:
       enabled: false
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "3000"
+      prometheus.io/path: "/metrics"
     adminPassword: admin
     service:
       type: ClusterIP
