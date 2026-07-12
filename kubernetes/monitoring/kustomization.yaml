@@ -6,3 +6,4 @@ resources:
   - configmaps.yaml
   - alertmanager-secret.yaml
   - loki-values.yaml
+  - dashboards/taskmanager-metrics.yaml
