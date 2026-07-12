@@ -8,7 +8,7 @@ const sdk = new NodeSDK({
     'service.name': 'taskmanager-backend',
   }),
   traceExporter: new OTLPTraceExporter({
-    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector.monitoring.svc.cluster.local:4317',
+    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317',
   }),
   instrumentations: [getNodeAutoInstrumentations()],
 });
