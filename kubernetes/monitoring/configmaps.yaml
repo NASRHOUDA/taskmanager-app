@@ -89,11 +89,32 @@ metadata:
 data:
   values.yaml: |
     persistence:
-      enabled: false
+      enabled: true
+      type: pvc
+      storageClassName: standard
+      accessModes:
+        - ReadWriteOnce
+      size: 1Gi
     adminPassword: admin
     service:
       type: ClusterIP
       port: 80
+    livenessProbe:
+      httpGet:
+        path: /api/health
+        port: 3000
+      initialDelaySeconds: 120
+      periodSeconds: 15
+      failureThreshold: 10
+      timeoutSeconds: 5
+    readinessProbe:
+      httpGet:
+        path: /api/health
+        port: 3000
+      initialDelaySeconds: 90
+      periodSeconds: 10
+      failureThreshold: 10
+      timeoutSeconds: 5
     podAnnotations:
       prometheus.io/scrape: "true"
       prometheus.io/port: "3000"
