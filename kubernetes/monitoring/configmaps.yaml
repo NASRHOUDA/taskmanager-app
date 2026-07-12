@@ -5,39 +5,81 @@ metadata:
   namespace: monitoring
 data:
   values.yaml: |
-    alertmanager:
-      enabled: false
-    pushgateway:
-      enabled: false
     server:
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
       persistentVolume:
         enabled: false
       resources:
         requests:
-          memory: 512Mi
           cpu: 250m
+          memory: 512Mi
         limits:
-          memory: 1Gi
           cpu: 500m
+          memory: 1Gi
       service:
         type: ClusterIP
         port: 80
-      global:
-        scrape_interval: 15s
-        evaluation_interval: 15s
-      extraScrapeConfigs: |
-        - job_name: 'taskmanager-backend'
-          static_configs:
-            - targets: ['backend-service.taskmanager.svc.cluster.local:5000']
-              labels:
-                app: taskmanager
-                service: backend
-        - job_name: 'taskmanager-frontend'
-          static_configs:
-            - targets: ['frontend-service.taskmanager.svc.cluster.local:80']
-              labels:
-                app: taskmanager
-                service: frontend
+    alertmanager:
+      enabled: true
+      persistentVolume:
+        enabled: false
+      config:
+        route:
+          receiver: gmail-alert
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 3h
+        receivers:
+        - name: gmail-alert
+          email_configs:
+          - to: houdanasr414@gmail.com
+            send_resolved: true
+        global:
+          smtp_smarthost: smtp.gmail.com:587
+          smtp_from: houdanasr414@gmail.com
+          smtp_auth_username: houdanasr414@gmail.com
+          smtp_require_tls: true
+    pushgateway:
+      enabled: false
+    serverFiles:
+      alerting_rules.yml:
+        groups:
+        - name: taskmanager-alerts
+          rules:
+          - alert: PodDown
+            expr: kube_deployment_status_replicas_available{namespace="taskmanager", deployment=~"backend|frontend"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Déploiement {{ $labels.deployment }} sans pod disponible"
+              description: "Le déploiement {{ $labels.deployment }} est à 0 replica disponible depuis 2 minutes."
+          - alert: HighCPUUsage
+            expr: rate(container_cpu_usage_seconds_total{namespace="taskmanager"}[5m]) > 0.7
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "CPU élevé sur {{ $labels.pod }}"
+              description: "Utilisation CPU au-dessus de 70% depuis 5 minutes."
+          - alert: HighMemoryUsage
+            expr: container_memory_usage_bytes{namespace="taskmanager"} / container_spec_memory_limit_bytes{namespace="taskmanager"} > 0.85
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Mémoire élevée sur {{ $labels.pod }}"
+              description: "Utilisation mémoire au-dessus de 85% depuis 5 minutes."
+          - alert: HPAMaxedOut
+            expr: kube_horizontalpodautoscaler_status_current_replicas >= kube_horizontalpodautoscaler_spec_max_replicas
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "HPA {{ $labels.horizontalpodautoscaler }} au maximum"
+              description: "Le HPA tourne au max de replicas depuis 10 minutes."
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -48,14 +90,19 @@ data:
   values.yaml: |
     persistence:
       enabled: false
-    podAnnotations:
-      prometheus.io/scrape: "true"
-      prometheus.io/port: "3000"
-      prometheus.io/path: "/metrics"
     adminPassword: admin
     service:
       type: ClusterIP
       port: 80
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "3000"
+      prometheus.io/path: "/metrics"
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
     datasources:
       datasources.yaml:
         apiVersion: 1
@@ -65,6 +112,10 @@ data:
           url: http://prometheus-server.monitoring.svc.cluster.local
           access: proxy
           isDefault: true
+        - name: Loki
+          type: loki
+          url: http://loki.monitoring.svc.cluster.local:3100
+          access: proxy
     grafana.ini:
       server:
         root_url: "http://grafana.local"
