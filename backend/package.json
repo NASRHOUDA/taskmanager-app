@@ -11,6 +11,7 @@
     "coverage": "jest --coverage"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.4",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/auto-instrumentations-node": "^0.78.0",
     "@opentelemetry/exporter-trace-otlp-grpc": "^0.220.0",
