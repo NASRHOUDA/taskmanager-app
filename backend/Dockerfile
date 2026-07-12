@@ -28,4 +28,4 @@ RUN rm -rf /usr/local/lib/node_modules/npm \
 USER node
 
 EXPOSE 5000
-CMD ["node", "server.js"]
+CMD ["node", "-r", "./tracing.js", "server.js"]

@@ -53,6 +53,8 @@ spec:
           value: production
         - name: PORT
           value: "5000"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector.monitoring.svc.cluster.local:4317"
         - name: DB_HOST
           value: taskmanager-db-rw
         - name: DB_PORT
