@@ -45,7 +45,7 @@ spec:
             app: backend
       containers:
       - name: backend
-        image: houdanasr/taskmanager-backend:113
+        image: houdanasr/taskmanager-backend:otel-fix
         ports:
         - containerPort: 5000
         env:

@@ -6,4 +6,4 @@ RUN npm install --production
 RUN apk update && apk upgrade --no-cache
 COPY backend/ .
 EXPOSE 5000
-CMD ["node", "server.js"]
+CMD ["node", "-r", "./tracing.js", "server.js"]
