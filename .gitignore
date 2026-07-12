@@ -33,3 +33,5 @@ Thumbs.db
 **/coverage/
 gitleaks.zip
 kubernetes/secrets.yaml
+prometheus-values-live.yaml
+grafana-values-actuelles.yaml
