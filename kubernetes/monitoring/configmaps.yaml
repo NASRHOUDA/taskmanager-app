@@ -88,6 +88,8 @@ metadata:
   namespace: monitoring
 data:
   values.yaml: |
+    initChownData:
+      enabled: false
     securityContext:
       runAsUser: 472
       runAsGroup: 472
