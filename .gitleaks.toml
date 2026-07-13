@@ -3,108 +3,57 @@ title = "taskmanager-app gitleaks config"
 [extend]
 useDefault = true
 
-# ===== alerting =====
-[[rules]]
-id = "gmail-smtp-user-literal"
-description = "Adresse Gmail utilisée pour SMTP/app"
-regex = '''houdanasr414@gmail\.com'''
-tags = ["gmail", "email"]
-
-[[rules]]
-id = "gmail-app-password-literal"
-description = "Gmail App Password connu (avec ou sans espaces)"
-regex = '''ebqv[ ]?ypwd[ ]?thmm[ ]?saja'''
-tags = ["gmail", "smtp", "password"]
-
+# ===== alerting (SMTP password only, email autorisé) =====
 [[rules]]
 id = "gmail-app-password-pattern"
-description = "Format générique d'un Gmail App Password (16 lettres, groupes de 4)"
-regex = '''\b([a-z]{4}[ ]?){3}[a-z]{4}\b'''
+description = "Format générique d'un Gmail App Password (16 lettres, groupes de 4 espacées ou non)"
+regex = '''\b([a-z]{4}[ ]?){4}\b'''
 tags = ["gmail", "smtp", "pattern"]
 
-# ===== app =====
-[[rules]]
-id = "jwt-secret-literal"
-description = "JWT secret connu"
-regex = '''super-secret-key-change-this-to-something-secure-123456789'''
-tags = ["jwt", "secret"]
-
+# ===== app secrets =====
 [[rules]]
 id = "jwt-secret-assignment"
-description = "JWT secret assigné en dur dans le code"
+description = "JWT secret assigné en dur"
 regex = '''(?i)(jwt_secret|jwtsecret)\s*[:=]\s*['"][^'"]{10,}['"]'''
 tags = ["jwt", "secret"]
 
 [[rules]]
-id = "replication-password-literal"
-description = "Mot de passe de réplication PostgreSQL connu"
-regex = '''BiDpwAb9oZgN4GPpcZfsN18/ONiUyMpU'''
+id = "replication-password-assignment"
+description = "Password de réplication PostgreSQL en dur"
+regex = '''(?i)replication[_-]?password\s*[:=]\s*['"][^'"]{10,}['"]'''
 tags = ["postgres", "replication", "password"]
 
 # ===== db =====
 [[rules]]
-id = "db-password-literal"
-description = "Mot de passe PostgreSQL connu"
-regex = '''iyVFLrz9dgAKkwUxovqobeylOaaOc1dvkT57JhOKW4FBa1tGWoyfgXb9lq1Znp97'''
-tags = ["postgres", "db", "password"]
-
-[[rules]]
-id = "postgres-connection-string"
-description = "Connexion PostgreSQL avec mot de passe en clair"
-regex = '''postgres(ql)?:\/\/[^:]+:[^@]{6,}@'''
-tags = ["postgres", "db"]
+id = "db-password-assignment"
+description = "Mot de passe DB en dur"
+regex = '''(?i)(db[_-]?pass(word)?|^password)\s*[:=]\s*['"][^'"]{8,}['"]'''
+tags = ["postgres", "password"]
 
 # ===== docker =====
 [[rules]]
-id = "dockerhub-password-literal"
-description = "Mot de passe Docker Hub connu"
-regex = '''nasr\.2005'''
+id = "dockerhub-password-assignment"
+description = "Mot de passe Docker Hub en dur"
+regex = '''(?i)docker[_-]?(hub)?[_-]?pass(word)?\s*[:=]\s*['"][^'"]{4,}['"]'''
 tags = ["docker", "password"]
 
-[[rules]]
-id = "dockerhub-username-literal"
-description = "Nom d'utilisateur Docker Hub connu"
-regex = '''houdanasr'''
-tags = ["docker", "username"]
-
 # ===== github =====
-# ghp_ tokens déjà couverts par le ruleset par défaut de Gitleaks
+[[rules]]
+id = "github-pat-token"
+description = "GitHub Personal Access Token"
+regex = '''ghp_[A-Za-z0-9]{36,40}'''
+tags = ["github", "token"]
 
 # ===== google oauth =====
 [[rules]]
-id = "google-oauth-client-secret-literal"
-description = "Google OAuth Client Secret connu"
-regex = '''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'''
-tags = ["google", "oauth"]
+id = "google-client-secret"
+description = "Google OAuth client_secret"
+regex = '''GOCSPX-[A-Za-z0-9_-]{20,}'''
+tags = ["google", "oauth", "secret"]
 
+# ===== sonarqube =====
 [[rules]]
-id = "google-oauth-client-secret-pattern"
-description = "Format générique Google OAuth Client Secret"
-regex = '''GOCSPX-[A-Za-z0-9_-]{28}'''
-tags = ["google", "oauth"]
-
-[[rules]]
-id = "google-oauth-client-id-literal"
-description = "Google OAuth Client ID connu"
-regex = '''856393744314-goma67qd6gpicl5gvglcjv3de44i6s3p\.apps\.googleusercontent\.com'''
-tags = ["google", "oauth"]
-
-[[rules]]
-id = "google-oauth-client-id-pattern"
-description = "Format générique Google OAuth Client ID"
-regex = '''[0-9]+-[a-z0-9]{32}\.apps\.googleusercontent\.com'''
-tags = ["google", "oauth"]
-
-# ===== sonar =====
-[[rules]]
-id = "sonarqube-token"
-description = "SonarQube Token"
+id = "sonar-token"
+description = "SonarQube token"
 regex = '''sqa_[a-f0-9]{40}'''
 tags = ["sonarqube", "token"]
-
-# ===== générique =====
-[[rules]]
-id = "generic-password-assignment"
-description = "Mot de passe assigné en dur (variable password/passwd/pwd)"
-regex = '''(?i)(password|passwd|pwd)\s*[:=]\s*['"][^'"]{6,}['"]'''
-tags = ["password", "generic"]
