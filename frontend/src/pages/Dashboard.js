@@ -296,7 +296,8 @@ function Dashboard() {
           value={filter.priority}
           onChange={(e) => setFilter({ ...filter, priority: e.target.value })}
         >
-          <option value="">task's Priorities </option>
+          <option value="">task's Prioritiesnasr.2005
+ </option>
           <option value="low">🟢 Low</option>
           <option value="medium">🟡 Medium</option>
           <option value="high">🔴 High</option>
