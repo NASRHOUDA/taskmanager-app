@@ -4,6 +4,14 @@ const helmet = require('helmet');
 const dotenv = require('dotenv');
 
 dotenv.config();
+
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ Unhandled Rejection (non-fatal):', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ Uncaught Exception (non-fatal):', err.message);
+});
 const app = require('./app');
 const { sequelize } = require('./models');
 const { startDeadlineChecker } = require('./services/deadlineChecker');
