@@ -1,4 +1,5 @@
 const nodemailer = require("nodemailer");
+const { trace } = require("@opentelemetry/api");
 
 // EMAIL_USER et EMAIL_APP_PASSWORD doivent venir de variables d'environnement
 // (Vault / Secret K8s), jamais écrits en dur ici.
@@ -39,12 +40,31 @@ async function sendDeadlineExceededEmail(task, user) {
     </div>
   `;
 
-  await transporter.sendMail({
-    from: `"Task Manager" <${process.env.EMAIL_USER}>`,
-    to: user.email,
-    subject: `⏰ Délai dépassé : ${task.title}`,
-    html,
-  });
+  const span = trace.getActiveSpan();
+
+  try {
+    const info = await transporter.sendMail({
+      from: `"Task Manager" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: `⏰ Délai dépassé : ${task.title}`,
+      html,
+    });
+
+    if (span) {
+      span.addEvent("mailer.email_sent", {
+        to: user.email,
+        messageId: info.messageId,
+      });
+    }
+  } catch (err) {
+    if (span) {
+      span.addEvent("mailer.email_failed", {
+        to: user.email,
+        error: err.message,
+      });
+    }
+    throw err;
+  }
 }
 
 module.exports = { sendDeadlineExceededEmail };
