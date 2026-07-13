@@ -5,6 +5,7 @@ metadata:
   namespace: taskmanager
 spec:
   instances: 2
+  livenessProbeTimeout: 60
   inheritedMetadata:
     annotations:
       prometheus.io/scrape: "true"
