@@ -1,0 +1,47 @@
+title = "taskmanager-app gitleaks config"
+
+# Garde toutes les regles par defaut de Gitleaks (tokens GitHub ghp_, cles AWS, etc.)
+[extend]
+useDefault = true
+
+[[rules]]
+id = "sonarqube-token"
+description = "SonarQube Token"
+regex = '''sqa_[a-f0-9]{40}'''
+tags = ["sonarqube", "token"]
+
+[[rules]]
+id = "google-oauth-client-secret"
+description = "Google OAuth Client Secret"
+regex = '''GOCSPX-[A-Za-z0-9_-]{28}'''
+tags = ["google", "oauth"]
+
+[[rules]]
+id = "google-oauth-client-id"
+description = "Google OAuth Client ID"
+regex = '''[0-9]+-[a-z0-9]{32}\.apps\.googleusercontent\.com'''
+tags = ["google", "oauth"]
+
+[[rules]]
+id = "gmail-app-password"
+description = "Gmail App Password (16 caracteres, espaces optionnels)"
+regex = '''\b([a-z]{4}[ ]?){4}\b'''
+tags = ["gmail", "smtp"]
+
+[[rules]]
+id = "jwt-secret-hardcoded"
+description = "JWT secret assigne en dur dans le code"
+regex = '''(?i)(jwt_secret|jwtsecret)\s*[:=]\s*['"][^'"]{10,}['"]'''
+tags = ["jwt", "secret"]
+
+[[rules]]
+id = "generic-password-assignment"
+description = "Mot de passe hardcode (variable password/passwd/pwd)"
+regex = '''(?i)(password|passwd|pwd)\s*[:=]\s*['"][^'"]{6,}['"]'''
+tags = ["password", "generic"]
+
+[[rules]]
+id = "postgres-connection-string"
+description = "Connexion PostgreSQL avec mot de passe en clair"
+regex = '''postgres(ql)?:\/\/[^:]+:[^@]{6,}@'''
+tags = ["postgres", "db"]
