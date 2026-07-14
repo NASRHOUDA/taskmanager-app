@@ -298,8 +298,8 @@ function Dashboard() {
         >
           <option value="">task's Priorities 
  </option>
-          <option value="low">🟢 Low</option>
-          <option value="medium">🟡 Medium </option>
+          <option value="low">🟢 low</option>
+          <option value="medium">🟡 Medium  h</option>
           <option value="high">🔴 High</option>
         </select>
       </div>
