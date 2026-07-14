@@ -227,15 +227,18 @@ pipeline {
 
 withSonarQubeEnv('SonarQube') {
     sh '''
+        echo "SONAR TOKEN LENGTH:"
+        echo ${#SONAR_TOKEN}
+
         npx sonar-scanner \
           -Dsonar.projectKey=taskmanager \
           -Dsonar.sources=backend,frontend \
           -Dsonar.host.url=http://host.docker.internal:9000 \
-          -Dsonar.token=${SONAR_TOKEN} \
-          -Dsonar.exclusions=**/node_modules/**,**/*.test.js,**/build/**,**/dist/** \
-          -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info,frontend/coverage/lcov.info \
-          -Dsonar.tests=backend/tests,frontend/src \
-          -Dsonar.test.inclusions=**/*.test.js \
+          -Dsonar.token="$SONAR_TOKEN" \
+          -Dsonar.exclusions="**/node_modules/**,**/*.test.js,**/build/**,**/dist/**" \
+          -Dsonar.javascript.lcov.reportPaths="backend/coverage/lcov.info,frontend/coverage/lcov.info" \
+          -Dsonar.tests="backend/tests,frontend/src" \
+          -Dsonar.test.inclusions="**/*.test.js" \
           -Dsonar.working.directory=.scannerwork
     '''
 }
