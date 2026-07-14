@@ -5,7 +5,7 @@ pipeline {
     DOCKER_IMAGE_BACKEND  = 'houdanasr/taskmanager-backend'
     DOCKER_IMAGE_FRONTEND = 'houdanasr/taskmanager-frontend'
     VAULT_ADDR            = 'http://host.docker.internal:8200'
-    VAULT_TOKEN           = 'root'
+    
     JENKINS_WS            = '/var/jenkins_home/workspace/taskmanager-pipeline'
     GH_USER               = 'NASRHOUDA'
 }
@@ -47,74 +47,93 @@ pipeline {
 
         stage('Fetch Secrets from Vault') {
     steps {
-        script {
-            env.DOCKER_USER = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/docker | jq -r '.data.data.username'
-            """, returnStdout: true).trim()
-            env.DOCKER_PASS = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/docker | jq -r '.data.data.password'
-            """, returnStdout: true).trim()
+        withCredentials([string(credentialsId: 'vault-token', variable: 'VAULT_TOKEN')]) {
+            script {
+                env.DOCKER_USER = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/docker | jq -r '.data.data.username'
+                """, returnStdout: true).trim()
+                env.DOCKER_PASS = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/docker | jq -r '.data.data.password'
+                """, returnStdout: true).trim()
 
-            env.GH_TOKEN = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/github | jq -r '.data.data.token'
-            """, returnStdout: true).trim()
+                env.GH_TOKEN = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/github | jq -r '.data.data.token'
+                """, returnStdout: true).trim()
 
-            env.SONAR_TOKEN = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/sonar | jq -r '.data.data.token'
-            """, returnStdout: true).trim()
+                env.SONAR_TOKEN = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/sonar | jq -r '.data.data.token'
+                """, returnStdout: true).trim()
 
-            env.GOOGLE_CLIENT_ID = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/google | jq -r '.data.data.client_id'
-            """, returnStdout: true).trim()
-            env.GOOGLE_CLIENT_SECRET = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/google | jq -r '.data.data.client_secret'
-            """, returnStdout: true).trim()
+                env.GOOGLE_CLIENT_ID = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/google | jq -r '.data.data.client_id'
+                """, returnStdout: true).trim()
+                env.GOOGLE_CLIENT_SECRET = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/google | jq -r '.data.data.client_secret'
+                """, returnStdout: true).trim()
 
-            env.DB_HOST = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.host'
-            """, returnStdout: true).trim()
-            env.DB_PORT = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.port'
-            """, returnStdout: true).trim()
-            env.DB_NAME = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.name'
-            """, returnStdout: true).trim()
-            env.DB_USER = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.user'
-            """, returnStdout: true).trim()
-            env.DB_PASSWORD = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.password'
-            """, returnStdout: true).trim()
+                env.DB_HOST = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.host'
+                """, returnStdout: true).trim()
+                env.DB_PORT = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.port'
+                """, returnStdout: true).trim()
+                env.DB_NAME = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.name'
+                """, returnStdout: true).trim()
+                env.DB_USER = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.user'
+                """, returnStdout: true).trim()
+                env.DB_PASSWORD = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/db | jq -r '.data.data.password'
+                """, returnStdout: true).trim()
 
-            env.JWT_SECRET = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.jwt_secret'
-            """, returnStdout: true).trim()
-            env.JWT_EXPIRES_IN = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.jwt_expires_in'
-            """, returnStdout: true).trim()
-            env.FRONTEND_URL = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.frontend_url'
-            """, returnStdout: true).trim()
-            env.API_URL = sh(script: """
-                set +x
-                curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.api_url'
-            """, returnStdout: true).trim()
+                env.JWT_SECRET = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.jwt_secret'
+                """, returnStdout: true).trim()
+                env.JWT_EXPIRES_IN = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.jwt_expires_in'
+                """, returnStdout: true).trim()
+                env.FRONTEND_URL = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.frontend_url'
+                """, returnStdout: true).trim()
+                env.API_URL = sh(script: """
+                    set +x
+                    curl -s -H "X-Vault-Token: ${VAULT_TOKEN}" ${VAULT_ADDR}/v1/secret/data/taskmanager/app | jq -r '.data.data.api_url'
+                """, returnStdout: true).trim()
 
-            echo '✅ Secrets récupérés depuis Vault (masqués dans les logs)'
+                echo '✅ Secrets récupérés depuis Vault (masqués dans les logs)'
+
+                // Garde-fou : détecte tout secret manquant/null AVANT que le pipeline
+                // continue et échoue 20 min plus tard avec un message trompeur
+                def required = [
+                    'DOCKER_USER','DOCKER_PASS','GH_TOKEN','SONAR_TOKEN',
+                    'GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET',
+                    'DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD',
+                    'JWT_SECRET','JWT_EXPIRES_IN','FRONTEND_URL','API_URL'
+                ]
+                def missing = required.findAll { name ->
+                    def v = env."${name}"
+                    !v || v == 'null' || v.trim() == ''
+                }
+                if (missing) {
+                    error("❌ Secrets manquants ou invalides depuis Vault : ${missing.join(', ')}")
+                }
+                echo '✅ Tous les secrets requis sont présents et valides'
+            }
         }
     }
 }
@@ -227,15 +246,18 @@ pipeline {
 
 withSonarQubeEnv('SonarQube') {
     sh '''
+        echo "SONAR TOKEN LENGTH:"
+        echo ${#SONAR_TOKEN}
+
         npx sonar-scanner \
           -Dsonar.projectKey=taskmanager \
           -Dsonar.sources=backend,frontend \
           -Dsonar.host.url=http://host.docker.internal:9000 \
-          -Dsonar.token=${SONAR_TOKEN} \
-          -Dsonar.exclusions=**/node_modules/**,**/*.test.js,**/build/**,**/dist/** \
-          -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info,frontend/coverage/lcov.info \
-          -Dsonar.tests=backend/tests,frontend/src \
-          -Dsonar.test.inclusions=**/*.test.js \
+          -Dsonar.token="$SONAR_TOKEN" \
+          -Dsonar.exclusions="**/node_modules/**,**/*.test.js,**/build/**,**/dist/**" \
+          -Dsonar.javascript.lcov.reportPaths="backend/coverage/lcov.info,frontend/coverage/lcov.info" \
+          -Dsonar.tests="backend/tests,frontend/src" \
+          -Dsonar.test.inclusions="**/*.test.js" \
           -Dsonar.working.directory=.scannerwork
     '''
 }
