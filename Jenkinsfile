@@ -293,10 +293,6 @@ withSonarQubeEnv('SonarQube') {
                     docker build \
                       -t ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} \
                       -t ${DOCKER_IMAGE_FRONTEND}:latest \
-              --format json \
-              --output trivy-frontend-report.json \
-              --format json \
-              --output trivy-frontend-report.json \
                       -f docker/Dockerfile.frontend.fixed \
                       .
                     echo "✅ Images buildées"
@@ -310,15 +306,11 @@ withSonarQubeEnv('SonarQube') {
             sh '''
                 echo "📦 Préparation du cache Trivy..."
                 mkdir -p /tmp/trivy-cache
-                
+
                 # Télécharge la DB une seule fois et la cache
                 docker run --rm \
                   -v /tmp/trivy-cache:/root/.cache/trivy \
                   aquasec/trivy:latest image \
-              --format json \
-              --output trivy-backend-report.json \
-              --format json \
-              --output trivy-backend-report.json \
                   --download-db-only \
                   --timeout 5m || {
                     echo "⚠️ Erreur download DB - Trivy utilisera le mode offline si possible"
@@ -336,7 +328,7 @@ stage('Trivy Image Scan') {
             retry(3) {
                 sh '''
                     set +e
-                    
+
                     echo "🔍 Scan Trivy - Backend image..."
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
@@ -348,9 +340,9 @@ stage('Trivy Image Scan') {
                       --timeout 5m \
                       --format json \
                       --output trivy-backend-report.json
-                    
+
                     BACKEND_RESULT=$?
-                    
+
                     echo "🔍 Scan Trivy - Frontend image..."
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
@@ -362,9 +354,9 @@ stage('Trivy Image Scan') {
                       --timeout 5m \
                       --format json \
                       --output trivy-frontend-report.json
-                    
+
                     FRONTEND_RESULT=$?
-                    
+
                     # Vérifie les résultats
                     if [ $BACKEND_RESULT -eq 0 ] && [ $FRONTEND_RESULT -eq 0 ]; then
                         echo "✅ Scans Trivy réussis - Aucune vulnérabilité CRITICAL/HIGH détectée"
@@ -390,11 +382,7 @@ stage('Trivy Image Scan') {
                     docker push ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}
                     docker push ${DOCKER_IMAGE_BACKEND}:latest
                     docker push ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER}
-                    docker push ${DOCKER_IMAGE_FRONTEND}:latest \
-              --format json \
-              --output trivy-frontend-report.json \
-              --format json \
-              --output trivy-frontend-report.json
+                    docker push ${DOCKER_IMAGE_FRONTEND}:latest
                     docker logout
                     echo "✅ Images poussées vers Docker Hub"
                 '''
@@ -403,7 +391,7 @@ stage('Trivy Image Scan') {
 
         stage('Update Manifests') {
     steps {
-        
+
         sh '''
             set +x
             set -e
@@ -488,7 +476,7 @@ stage('Trivy Image Scan') {
         archiveArtifacts artifacts: 'zap-report/zap_report.html', allowEmptyArchive: true
     }
 }
-        
+
     } // ← Fin du bloc stages
 
     post {
