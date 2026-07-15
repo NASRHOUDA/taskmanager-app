@@ -36,6 +36,39 @@ data:
             "defaults": {
               "color": { "mode": "thresholds" },
               "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": 0 }, { "color": "green", "value": 1 } ] },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+          "id": 7,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "textMode": "auto"
+          },
+          "pluginVersion": "10.0.0",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+              "expr": "increase(default_jenkins_builds_available_builds_count{jenkins_job=\"taskmanager-pipeline\"}[1d])",
+              "legendFormat": "Builds/24h",
+              "refId": "A"
+            }
+          ],
+          "title": "Fréquence de déploiement (24h)",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -48,7 +81,7 @@ data:
             },
             "overrides": []
           },
-          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
           "id": 1,
           "options": {
             "colorMode": "value",
@@ -62,7 +95,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "default_jenkins_builds_last_build_duration_milliseconds{jenkins_job=\"taskmanager-pipeline\"}",
+              "expr": "(default_jenkins_builds_last_build_duration_milliseconds{jenkins_job=\"taskmanager-pipeline\"} and on(jenkins_job) default_jenkins_builds_last_build_result_ordinal{jenkins_job=\"taskmanager-pipeline\"} != 3) or last_over_time((default_jenkins_builds_last_build_duration_milliseconds{jenkins_job=\"taskmanager-pipeline\"} and on(jenkins_job) default_jenkins_builds_last_build_result_ordinal{jenkins_job=\"taskmanager-pipeline\"} != 3)[7d:])",
               "legendFormat": "Duree build",
               "refId": "A"
             }
@@ -80,15 +113,15 @@ data:
                 "mode": "absolute",
                 "steps": [
                   { "color": "green", "value": null },
-                  { "color": "orange", "value": 60 },
-                  { "color": "red", "value": 180 }
+                  { "color": "orange", "value": 60000 },
+                  { "color": "red", "value": 180000 }
                 ]
               },
-              "unit": "s"
+              "unit": "ms"
             },
             "overrides": []
           },
-          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
           "id": 2,
           "options": {
             "colorMode": "value",
@@ -102,7 +135,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "jenkins_job_waiting_duration{quantile=\"0.5\"}",
+              "expr": "(default_jenkins_builds_last_build_waiting_milliseconds{jenkins_job=\"taskmanager-pipeline\"} and on(jenkins_job) default_jenkins_builds_last_build_result_ordinal{jenkins_job=\"taskmanager-pipeline\"} != 3) or last_over_time((default_jenkins_builds_last_build_waiting_milliseconds{jenkins_job=\"taskmanager-pipeline\"} and on(jenkins_job) default_jenkins_builds_last_build_result_ordinal{jenkins_job=\"taskmanager-pipeline\"} != 3)[7d:])",
               "legendFormat": "Temps d attente",
               "refId": "A"
             }
@@ -145,7 +178,7 @@ data:
               }
             ]
           },
-          "gridPos": { "h": 9, "w": 12, "x": 0, "y": 8 },
+          "gridPos": { "h": 9, "w": 12, "x": 0, "y": 16 },
           "id": 4,
           "options": {
             "legend": { "calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": true },
@@ -186,7 +219,7 @@ data:
             },
             "overrides": []
           },
-          "gridPos": { "h": 9, "w": 6, "x": 12, "y": 8 },
+          "gridPos": { "h": 9, "w": 6, "x": 12, "y": 16 },
           "id": 5,
           "options": {
             "colorMode": "value",
