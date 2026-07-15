@@ -296,10 +296,10 @@ function Dashboard() {
           value={filter.priority}
           onChange={(e) => setFilter({ ...filter, priority: e.target.value })}
         >
-          <option value="">Priorities  houdaaa45
+          <option value="">Priorities 
  </option>
           <option value="low">🟢 low </option>
-          <option value="medium">🟡 Medium  h</option>
+          <option value="medium">🟡 Medium  </option>
           <option value="high">🔴 High</option>
         </select>
       </div>
