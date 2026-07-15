@@ -21,6 +21,9 @@ RUN test -f /app/build/index.html && echo "✅ Build réussi" || (echo "❌ Buil
 # Stage 2: Production
 FROM nginx:alpine
 
+# Mettre à jour les paquets Alpine pour corriger les CVE (curl, c-ares, libexpat, etc.)
+RUN apk update && apk upgrade --no-cache
+
 # Copier les fichiers build
 COPY --from=builder /app/build /usr/share/nginx/html
 
@@ -46,5 +49,6 @@ server { \
         deny all; \
     } \
 }' > /etc/nginx/conf.d/default.conf
+
 EXPOSE 80 8080
 CMD ["nginx", "-g", "daemon off;"]
