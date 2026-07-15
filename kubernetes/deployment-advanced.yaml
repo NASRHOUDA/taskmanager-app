@@ -45,7 +45,7 @@ spec:
             app: backend
       containers:
       - name: backend
-        image: houdanasr/taskmanager-backend:155
+        image: houdanasr/taskmanager-backend:158
         ports:
         - containerPort: 5000
         env:
@@ -173,7 +173,7 @@ spec:
             app: frontend
       containers:
       - name: frontend
-        image: houdanasr/taskmanager-frontend:155
+        image: houdanasr/taskmanager-frontend:158
         ports:
         - containerPort: 80
         resources:
