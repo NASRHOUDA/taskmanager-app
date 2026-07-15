@@ -342,12 +342,12 @@ stage('Trivy Image Scan') {
                       -v /var/run/docker.sock:/var/run/docker.sock \
                       -v /tmp/trivy-cache:/root/.cache/trivy \
                       aquasec/trivy:latest image \
+                      ${DOCKER_IMAGE_BACKEND}:latest \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
                       --timeout 5m \
                       --format json \
-                      --output trivy-backend-report.json \
-                      ${DOCKER_IMAGE_BACKEND}:latest
+                      --output trivy-backend-report.json
                     
                     BACKEND_RESULT=$?
                     
@@ -356,12 +356,12 @@ stage('Trivy Image Scan') {
                       -v /var/run/docker.sock:/var/run/docker.sock \
                       -v /tmp/trivy-cache:/root/.cache/trivy \
                       aquasec/trivy:latest image \
+                      ${DOCKER_IMAGE_FRONTEND}:latest \
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
                       --timeout 5m \
                       --format json \
-                      --output trivy-frontend-report.json \
-                      ${DOCKER_IMAGE_FRONTEND}:latest
+                      --output trivy-frontend-report.json
                     
                     FRONTEND_RESULT=$?
                     
