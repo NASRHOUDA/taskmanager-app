@@ -7,3 +7,4 @@ resources:
   - alertmanager-secret.yaml
   - loki-values.yaml
   - dashboards/taskmanager-metrics.yaml
+  - dashboards/jenkins-cicd-metrics.yaml
