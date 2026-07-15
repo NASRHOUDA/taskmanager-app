@@ -287,7 +287,7 @@ function Dashboard() {
           value={filter.status}
           onChange={(e) => setFilter({ ...filter, status: e.target.value })}
         >
-          <option value=""> Status houda </option>
+          <option value=""> Status 888 </option>
           <option value="todo">📌 To Do </option>
           <option value="in-progress">⏳ In Progress</option>
           <option value="done">✅ Done</option>
@@ -296,7 +296,7 @@ function Dashboard() {
           value={filter.priority}
           onChange={(e) => setFilter({ ...filter, priority: e.target.value })}
         >
-          <option value="">Priorities houda 
+          <option value="">Priorities  
  </option>
           <option value="low">🟢 low </option>
           <option value="medium">🟡 Medium  h</option>
