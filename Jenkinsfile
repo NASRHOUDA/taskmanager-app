@@ -333,6 +333,8 @@ stage('Trivy Image Scan') {
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
                       -v /tmp/trivy-cache:/root/.cache/trivy \
+                      -v "${JENKINS_WS}:${JENKINS_WS}" \
+                      -w "${JENKINS_WS}" \
                       aquasec/trivy:latest image \
                       ${DOCKER_IMAGE_BACKEND}:latest \
                       --severity HIGH,CRITICAL \
@@ -347,6 +349,8 @@ stage('Trivy Image Scan') {
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
                       -v /tmp/trivy-cache:/root/.cache/trivy \
+                      -v "${JENKINS_WS}:${JENKINS_WS}" \
+                      -w "${JENKINS_WS}" \
                       aquasec/trivy:latest image \
                       ${DOCKER_IMAGE_FRONTEND}:latest \
                       --severity HIGH,CRITICAL \
@@ -357,7 +361,6 @@ stage('Trivy Image Scan') {
 
                     FRONTEND_RESULT=$?
 
-                    # Vérifie les résultats
                     if [ $BACKEND_RESULT -eq 0 ] && [ $FRONTEND_RESULT -eq 0 ]; then
                         echo "✅ Scans Trivy réussis - Aucune vulnérabilité CRITICAL/HIGH détectée"
                         exit 0
