@@ -30,12 +30,25 @@ COPY --from=builder /app/build /usr/share/nginx/html
 # Vérifier que les fichiers sont présents
 RUN test -f /usr/share/nginx/html/index.html && echo "✅ Fichiers copiés avec succès" || (echo "❌ Erreur: index.html non trouvé" && exit 1)
 
-# Configuration nginx simple sans boucle + endpoint stub_status pour Prometheus
+# Configuration nginx avec TOUS les headers de sécurité
 RUN echo 'server { \
     listen 80; \
     server_name localhost; \
     root /usr/share/nginx/html; \
     index index.html; \
+    \
+    # ===== HEADERS DE SÉCURITÉ ===== \
+    add_header X-Content-Type-Options "nosniff" always; \
+    add_header X-Frame-Options "DENY" always; \
+    add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''unsafe-inline'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\''; connect-src '\''self'\''; frame-ancestors '\''none'\'';" always; \
+    add_header Cross-Origin-Embedder-Policy "require-corp" always; \
+    add_header Cross-Origin-Opener-Policy "same-origin" always; \
+    add_header Cross-Origin-Resource-Policy "same-origin" always; \
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always; \
+    add_header Cache-Control "no-cache, no-store, must-revalidate, private" always; \
+    add_header Pragma "no-cache" always; \
+    add_header Expires "0" always; \
+    \
     location / { \
         try_files $uri $uri/ /index.html =404; \
     } \
