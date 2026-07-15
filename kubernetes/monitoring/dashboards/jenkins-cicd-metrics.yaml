@@ -114,46 +114,6 @@ data:
           "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
           "fieldConfig": {
             "defaults": {
-              "color": { "mode": "thresholds" },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "orange", "value": 3 },
-                  { "color": "red", "value": 6 }
-                ]
-              },
-              "unit": "short"
-            },
-            "overrides": []
-          },
-          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
-          "id": 3,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "area",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-            "textMode": "auto"
-          },
-          "pluginVersion": "10.0.0",
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "jenkins_queue_pending_value",
-              "legendFormat": "Jobs en attente",
-              "refId": "A"
-            }
-          ],
-          "title": "Jobs en attente dans la queue",
-          "type": "stat"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "fieldConfig": {
-            "defaults": {
               "color": { "mode": "palette-classic" },
               "custom": {
                 "axisCenteredZero": false,
@@ -247,42 +207,6 @@ data:
           ],
           "title": "Builds instables (Unstable)",
           "type": "stat"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "fieldConfig": {
-            "defaults": {
-              "color": { "mode": "palette-classic" },
-              "mappings": [],
-              "unit": "short"
-            },
-            "overrides": []
-          },
-          "gridPos": { "h": 9, "w": 6, "x": 18, "y": 8 },
-          "id": 6,
-          "options": {
-            "displayLabels": ["percent"],
-            "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-            "pieType": "donut",
-            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-            "tooltip": { "mode": "single", "sort": "none" }
-          },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "default_jenkins_executors_available",
-              "legendFormat": "Disponibles",
-              "refId": "A"
-            },
-            {
-              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "default_jenkins_executors_busy",
-              "legendFormat": "Occupes",
-              "refId": "B"
-            }
-          ],
-          "title": "Executors : disponibles vs occupes",
-          "type": "piechart"
         }
       ],
       "refresh": "30s",
