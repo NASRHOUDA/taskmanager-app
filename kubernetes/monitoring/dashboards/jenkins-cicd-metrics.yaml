@@ -44,7 +44,7 @@ data:
                   { "color": "red", "value": 600 }
                 ]
               },
-              "unit": "s"
+              "unit": "ms"
             },
             "overrides": []
           },
@@ -62,7 +62,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "jenkins_job_total_duration{quantile=\"0.5\"}",
+              "expr": "default_jenkins_builds_last_build_duration_milliseconds{jenkins_job=\"taskmanager-pipeline\"}",
               "legendFormat": "Duree build",
               "refId": "A"
             }
