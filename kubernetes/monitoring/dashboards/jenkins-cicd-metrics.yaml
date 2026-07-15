@@ -194,13 +194,13 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "rate(jenkins_runs_success_total[5m])",
+              "expr": "default_jenkins_builds_success_build_count_total",
               "legendFormat": "Succes",
               "refId": "A"
             },
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "rate(jenkins_runs_failure_total[5m])",
+              "expr": "default_jenkins_builds_failed_build_count_total",
               "legendFormat": "Echecs",
               "refId": "B"
             }
@@ -270,13 +270,13 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "jenkins_executors_available",
+              "expr": "default_jenkins_executors_available",
               "legendFormat": "Disponibles",
               "refId": "A"
             },
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "jenkins_executors_busy",
+              "expr": "default_jenkins_executors_busy",
               "legendFormat": "Occupes",
               "refId": "B"
             }
