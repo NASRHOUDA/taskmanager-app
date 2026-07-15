@@ -102,7 +102,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "jenkins_job_waiting_duration",
+              "expr": "jenkins_job_waiting_duration{quantile=\"0.5\"}",
               "legendFormat": "Temps d attente",
               "refId": "A"
             }
