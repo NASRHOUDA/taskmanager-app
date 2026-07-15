@@ -21,12 +21,12 @@ data:
       service:
         type: ClusterIP
         port: 80
-      extraScrapeConfigs: |
-        - job_name: 'jenkins'
-          metrics_path: '/prometheus/'
-          scrape_interval: 30s
-          static_configs:
-            - targets: ['192.168.49.3:8080']
+    extraScrapeConfigs: |
+      - job_name: 'jenkins'
+        metrics_path: '/prometheus/'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['192.168.49.3:8080']
     alertmanager:
       enabled: true
       persistentVolume:
