@@ -1,9 +1,20 @@
 FROM node:18-alpine
+
 WORKDIR /app
+
 COPY backend/package*.json ./
+
+# Installer les dépendances de production
 RUN npm install --production
-# Mettre à jour les paquets Alpine pour corriger les CVE OpenSSL
+
+# Mettre à jour les paquets Alpine pour corriger les CVE système
 RUN apk update && apk upgrade --no-cache
+
+# Mettre à jour npm pour corriger les CVE dans les dépendances internes
+RUN npm install -g npm@10.9.4
+
 COPY backend/ .
+
 EXPOSE 5000
+
 CMD ["node", "-r", "./tracing.js", "server.js"]
