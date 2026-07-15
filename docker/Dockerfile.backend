@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -10,8 +10,8 @@ RUN npm install --production
 # Mettre à jour les paquets Alpine pour corriger les CVE système
 RUN apk update && apk upgrade --no-cache
 
-# Mettre à jour npm pour corriger les CVE dans les dépendances internes
-RUN npm install -g npm@10.9.4
+# Mise à jour npm vers la dernière version stable (corrige les CVE internes)
+RUN npm install -g npm@latest
 
 COPY backend/ .
 
