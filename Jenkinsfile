@@ -203,6 +203,7 @@ pipeline {
               --json --output=/var/jenkins_home/workspace/taskmanager-pipeline/backend/semgrep-report.json \
             || echo "⚠️ Semgrep scan terminé"
         '''
+        archiveArtifacts artifacts: 'backend/semgrep-report.json', allowEmptyArchive: true
     }
 }
 
@@ -292,6 +293,10 @@ withSonarQubeEnv('SonarQube') {
                     docker build \
                       -t ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} \
                       -t ${DOCKER_IMAGE_FRONTEND}:latest \
+              --format json \
+              --output trivy-frontend-report.json \
+              --format json \
+              --output trivy-frontend-report.json \
                       -f docker/Dockerfile.frontend.fixed \
                       .
                     echo "✅ Images buildées"
@@ -310,6 +315,10 @@ withSonarQubeEnv('SonarQube') {
                 docker run --rm \
                   -v /tmp/trivy-cache:/root/.cache/trivy \
                   aquasec/trivy:latest image \
+              --format json \
+              --output trivy-backend-report.json \
+              --format json \
+              --output trivy-backend-report.json \
                   --download-db-only \
                   --timeout 5m || {
                     echo "⚠️ Erreur download DB - Trivy utilisera le mode offline si possible"
@@ -336,6 +345,8 @@ stage('Trivy Image Scan') {
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
                       --timeout 5m \
+                      --format json \
+                      --output trivy-backend-report.json \
                       ${DOCKER_IMAGE_BACKEND}:latest
                     
                     BACKEND_RESULT=$?
@@ -348,6 +359,8 @@ stage('Trivy Image Scan') {
                       --severity HIGH,CRITICAL \
                       --exit-code 0 \
                       --timeout 5m \
+                      --format json \
+                      --output trivy-frontend-report.json \
                       ${DOCKER_IMAGE_FRONTEND}:latest
                     
                     FRONTEND_RESULT=$?
@@ -366,6 +379,7 @@ stage('Trivy Image Scan') {
                 '''
             }
         }
+        archiveArtifacts artifacts: 'trivy-*-report.json', allowEmptyArchive: true
     }
 }
         stage('Push to Docker Hub') {
@@ -376,7 +390,11 @@ stage('Trivy Image Scan') {
                     docker push ${DOCKER_IMAGE_BACKEND}:${BUILD_NUMBER}
                     docker push ${DOCKER_IMAGE_BACKEND}:latest
                     docker push ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER}
-                    docker push ${DOCKER_IMAGE_FRONTEND}:latest
+                    docker push ${DOCKER_IMAGE_FRONTEND}:latest \
+              --format json \
+              --output trivy-frontend-report.json \
+              --format json \
+              --output trivy-frontend-report.json
                     docker logout
                     echo "✅ Images poussées vers Docker Hub"
                 '''
