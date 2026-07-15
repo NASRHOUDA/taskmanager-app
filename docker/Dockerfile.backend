@@ -10,8 +10,8 @@ RUN npm install --production
 # Mettre à jour les paquets Alpine pour corriger les CVE système
 RUN apk update && apk upgrade --no-cache
 
-# Mise à jour npm vers la dernière version stable (corrige les CVE internes)
-RUN npm install -g npm@latest
+# Mettre à jour npm vers la dernière version compatible avec Node 20 (10.9.4)
+RUN npm install -g npm@10.9.4
 
 COPY backend/ .
 
