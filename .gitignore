@@ -36,3 +36,4 @@ kubernetes/secrets.yaml
 prometheus-values-live.yaml
 grafana-values-actuelles.yaml
 kubernetes/monitoring/configmaps.yaml.old
+desktop.ini
