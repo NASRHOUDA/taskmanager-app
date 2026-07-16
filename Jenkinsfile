@@ -293,7 +293,7 @@ withSonarQubeEnv('SonarQube') {
                     docker build \
                       -t ${DOCKER_IMAGE_FRONTEND}:${BUILD_NUMBER} \
                       -t ${DOCKER_IMAGE_FRONTEND}:latest \
-                      -f docker/Dockerfile.frontend.fixed \
+                      -f docker/Dockerfile.frontend \
                       .
                     echo "✅ Images buildées"
                 """
