@@ -95,7 +95,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "(default_jenkins_builds_last_build_duration_milliseconds{jenkins_job=\"taskmanager-pipeline\"} and on(jenkins_job) default_jenkins_builds_last_build_result_ordinal{jenkins_job=\"taskmanager-pipeline\"} != 3) or last_over_time((default_jenkins_builds_last_build_duration_milliseconds{jenkins_job=\"taskmanager-pipeline\"} and on(jenkins_job) default_jenkins_builds_last_build_result_ordinal{jenkins_job=\"taskmanager-pipeline\"} != 3)[7d:])",
+              "expr": "default_jenkins_builds_last_build_duration_milliseconds{jenkins_job=\"taskmanager-pipeline\"}\r\nand on(jenkins_job) default_jenkins_builds_last_build_result{jenkins_job=\"taskmanager-pipeline\"} != 3",
               "legendFormat": "Duree build",
               "refId": "A"
             }
@@ -135,7 +135,7 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "(default_jenkins_builds_last_build_waiting_milliseconds{jenkins_job=\"taskmanager-pipeline\"} and on(jenkins_job) default_jenkins_builds_last_build_result_ordinal{jenkins_job=\"taskmanager-pipeline\"} != 3) or last_over_time((default_jenkins_builds_last_build_waiting_milliseconds{jenkins_job=\"taskmanager-pipeline\"} and on(jenkins_job) default_jenkins_builds_last_build_result_ordinal{jenkins_job=\"taskmanager-pipeline\"} != 3)[7d:])",
+              "expr": "default_jenkins_builds_last_build_waiting_milliseconds{jenkins_job=\"taskmanager-pipeline\"}",
               "legendFormat": "Temps d attente",
               "refId": "A"
             }
