@@ -24,7 +24,7 @@ data:
     extraScrapeConfigs: |
       - job_name: 'jenkins'
         metrics_path: '/prometheus/'
-        scrape_interval: 30s
+        scrape_interval: 10s
         static_configs:
           - targets: ['192.168.49.3:8080']
     alertmanager:
