@@ -273,7 +273,7 @@ function Register() {
     setLoading(true);
     const success = await register(name, email, password);
     setLoading(false);
-    if (success) navigate("/");
+    if (success) navigate("/login");
     else setError("Registration failed. This email may already be in use.");
   };
 
