@@ -6,5 +6,6 @@ resources:
   - configmaps.yaml
   - alertmanager-secret.yaml
   - loki-values.yaml
+  - loki-deployment.yaml
   - dashboards/taskmanager-metrics.yaml
   - dashboards/jenkins-cicd-metrics.yaml
