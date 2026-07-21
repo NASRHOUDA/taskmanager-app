@@ -27,6 +27,12 @@ data:
         scrape_interval: 10s
         static_configs:
           - targets: ['host.docker.internal:8080']
+      - job_name: 'jenkins-docker-exporter'
+        scrape_interval: 10s
+        static_configs:
+          - targets: ['host.docker.internal:9101']
+            labels:
+              instance: 'jenkins' 
     alertmanager:
       enabled: true
       persistentVolume:
