@@ -1,243 +1,220 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: taskmanager-logs-alerts-dashboard
+  name: dashboard-taskmanager-logs
   namespace: monitoring
   labels:
     grafana_dashboard: "1"
 data:
-  taskmanager-logs-alerts.json: |
+  taskmanager-logs.json: |
     {
-      "annotations": {
-        "list": [
-          {
-            "builtIn": 1,
-            "datasource": { "type": "grafana", "uid": "-- Grafana --" },
-            "enable": true,
-            "hide": true,
-            "iconColor": "rgba(0, 211, 255, 1)",
-            "name": "Annotations & Alerts",
-            "type": "dashboard"
-          }
-        ]
-      },
+      "annotations": {"list": []},
       "editable": true,
-      "fiscalYearStartMonth": 0,
+      "gnetId": null,
       "graphTooltip": 0,
       "id": null,
       "links": [],
       "panels": [
         {
-          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-          "fieldConfig": {
-            "defaults": {
-              "color": { "mode": "thresholds" },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "red", "value": 1 }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 0, "y": 0},
           "id": 1,
-          "options": {
-            "cellHeight": "sm",
-            "showHeader": true
-          },
-          "pluginVersion": "10.0.0",
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "ALERTS{alertstate=\"firing\", namespace=\"taskmanager\"}",
-              "format": "table",
-              "instant": true,
-              "refId": "A"
-            }
-          ],
-          "title": "🔴 Alertes actives (taskmanager)",
-          "type": "table"
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"password|invalid credentials|LDAP|authentication failed\" [5m])", "refId": "A"}],
+          "title": "\u274c Auth: Mdp/LDAP",
+          "type": "stat"
         },
         {
-          "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
-          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 6 },
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 4, "y": 0},
           "id": 2,
-          "options": {
-            "dedupStrategy": "none",
-            "enableLogDetails": true,
-            "prettifyLogMessage": false,
-            "showCommonLabels": false,
-            "showLabels": true,
-            "showTime": true,
-            "sortOrder": "Descending",
-            "wrapLogMessage": true
-          },
-          "targets": [
-            {
-              "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
-              "expr": "{namespace=\"taskmanager\"} |~ \"(?i)(error|invalid|unauthorized|failed|fail|econnrefused|timeout|401|403|500|not found)\"",
-              "refId": "A"
-            }
-          ],
-          "title": "📋 Logs d'erreurs - taskmanager (backend + frontend)",
-          "type": "logs"
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"user.*not found|account.*locked|permission denied|unauthorized\" [5m])", "refId": "A"}],
+          "title": "\u274c Auth: User/Perms",
+          "type": "stat"
         },
         {
-          "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
-          "fieldConfig": {
-            "defaults": {
-              "color": { "mode": "thresholds" },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "yellow", "value": 1 },
-                  { "color": "red", "value": 5 }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 16 },
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 8, "y": 0},
           "id": 3,
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "horizontal",
-            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-            "textMode": "auto"
-          },
-          "targets": [
-            {
-              "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
-              "expr": "sum(count_over_time({namespace=\"taskmanager\"} |~ \"(?i)(invalid password|wrong password|mot de passe)\" [1h]))",
-              "refId": "A"
-            }
-          ],
-          "title": "🔑 Mot de passe invalide (1h)",
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"token.*expired|jwt.*invalid|refresh.*failed|invalid.*grant\" [5m])", "refId": "A"}],
+          "title": "\ud83d\udd11 OAuth: Token",
           "type": "stat"
         },
         {
-          "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
-          "fieldConfig": {
-            "defaults": {
-              "color": { "mode": "thresholds" },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "yellow", "value": 1 },
-                  { "color": "red", "value": 5 }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 16 },
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 12, "y": 0},
           "id": 4,
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "horizontal",
-            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-            "textMode": "auto"
-          },
-          "targets": [
-            {
-              "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
-              "expr": "sum(count_over_time({namespace=\"taskmanager\"} |~ \"(?i)(user not found|utilisateur introuvable|no user)\" [1h]))",
-              "refId": "A"
-            }
-          ],
-          "title": "👤 Utilisateur introuvable (1h)",
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"callback.*mismatch|client.*id|client.*secret|scope\" [5m])", "refId": "A"}],
+          "title": "\ud83d\udd11 OAuth: Config",
           "type": "stat"
         },
         {
-          "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
-          "fieldConfig": {
-            "defaults": {
-              "color": { "mode": "thresholds" },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "yellow", "value": 1 },
-                  { "color": "red", "value": 5 }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": { "h": 6, "w": 6, "x": 12, "y": 16 },
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 16, "y": 0},
           "id": 5,
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "horizontal",
-            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-            "textMode": "auto"
-          },
-          "targets": [
-            {
-              "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
-              "expr": "sum(count_over_time({namespace=\"taskmanager\"} |~ \"(?i)(econnrefused|network error|connection refused|timeout)\" [1h]))",
-              "refId": "A"
-            }
-          ],
-          "title": "🌐 Erreurs réseau (1h)",
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"ECONNREFUSED|connection refused|connection reset|ETIMEDOUT\" [5m])", "refId": "A"}],
+          "title": "\ud83c\udf10 R\u00e9seau: Cnx",
           "type": "stat"
         },
         {
-          "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
-          "fieldConfig": {
-            "defaults": {
-              "color": { "mode": "thresholds" },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "yellow", "value": 1 },
-                  { "color": "red", "value": 5 }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": { "h": 6, "w": 6, "x": 18, "y": 16 },
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 20, "y": 0},
           "id": 6,
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "horizontal",
-            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-            "textMode": "auto"
-          },
-          "targets": [
-            {
-              "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
-              "expr": "sum(count_over_time({namespace=\"taskmanager\"} |~ \"(?i)(500|internal server error)\" [1h]))",
-              "refId": "A"
-            }
-          ],
-          "title": "💥 Erreurs serveur 500 (1h)",
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"DNS.*failed|network.*unreachable|socket.*hang|connection.*dropped\" [5m])", "refId": "A"}],
+          "title": "\ud83c\udf10 R\u00e9seau: DNS/Sockets",
           "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 0, "y": 3},
+          "id": 7,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"database.*down|connection.*refused|query.*timeout|deadlock\" [5m])", "refId": "A"}],
+          "title": "\ud83d\udcbe DB: Cnx/Timeout",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 4, "y": 3},
+          "id": 8,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"constraint.*violation|unique|foreign.*key|transaction.*error\" [5m])", "refId": "A"}],
+          "title": "\ud83d\udcbe DB: Constraints",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 8, "y": 3},
+          "id": 9,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"table.*not found|column.*not found|invalid.*sql|syntax\" [5m])", "refId": "A"}],
+          "title": "\ud83d\udcbe DB: Schema",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 12, "y": 3},
+          "id": 10,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"panic|fatal|crash|abort\" [5m])", "refId": "A"}],
+          "title": "\u26a0\ufe0f App: Panic/Crash",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 16, "y": 3},
+          "id": 11,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"out.*of.*memory|OOM|memory.*limit|heap\" [5m])", "refId": "A"}],
+          "title": "\u26a0\ufe0f App: OOM/Memory",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 20, "y": 3},
+          "id": 12,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"validation.*error|invalid.*input|bad.*request\" [5m])", "refId": "A"}],
+          "title": "\u26a0\ufe0f App: Validation",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 0, "y": 6},
+          "id": 13,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"rate.*limit|throttle|too.*many.*requests\" [5m])", "refId": "A"}],
+          "title": "\u26a0\ufe0f App: Rate Limit",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 4, "y": 6},
+          "id": 14,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"service.*unavailable|down|offline\" [5m])", "refId": "A"}],
+          "title": "\u26a0\ufe0f App: Service Down",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 8, "y": 6},
+          "id": 15,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"disk.*full|out.*of.*space|file.*not.*found\" [5m])", "refId": "A"}],
+          "title": "\u26a0\ufe0f App: Disk/Files",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 12, "y": 6},
+          "id": 16,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"CrashLoopBackOff|OOMKilled|Evicted|ImagePullBackOff\" [5m])", "refId": "A"}],
+          "title": "\ud83d\udc33 K8s: Pod Status",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 16, "y": 6},
+          "id": 17,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"health.*check.*failed|liveness.*failed|readiness.*failed\" [5m])", "refId": "A"}],
+          "title": "\ud83d\udc33 K8s: Health Probes",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 3, "w": 4, "x": 20, "y": 6},
+          "id": 18,
+          "options": {"colorMode": "value", "graphMode": "none", "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "count_over_time({namespace=\"taskmanager\"} |~ \"ssl.*error|tls.*error|certificate.*expired|untrusted\" [5m])", "refId": "A"}],
+          "title": "\ud83d\udd12 SSL/TLS: Certs",
+          "type": "stat"
+        },
+        {
+          "datasource": "Loki",
+          "fieldConfig": {"defaults": {}, "overrides": []},
+          "gridPos": {"h": 12, "w": 24, "x": 0, "y": 9},
+          "id": 19,
+          "options": {"dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": true, "showCommonLabels": true, "showLabels": true, "showTime": true, "sortOrder": 2, "wrapLogMessage": false},
+          "targets": [{"expr": "{namespace=\"taskmanager\"} |~ \"error|Error|ERROR|failed|Failed|ECONNREFUSED|panic|password|token|oauth|database|query|timeout|constraint|validation|rate|service|disk|health|certificate\"", "refId": "A"}],
+          "title": "\ud83d\udccb Tous les logs d'erreur (d\u00e9taill\u00e9s, class\u00e9s par pod/timestamp)",
+          "type": "logs"
         }
       ],
-      "refresh": "30s",
-      "schemaVersion": 39,
-      "tags": ["taskmanager", "logs", "alerts"],
-      "templating": { "list": [] },
-      "time": { "from": "now-6h", "to": "now" },
+      "refresh": "10s",
+      "schemaVersion": 38,
+      "style": "dark",
+      "tags": ["taskmanager", "logs", "monitoring", "errors", "comprehensive"],
+      "templating": {"list": []},
+      "time": {"from": "now-1h", "to": "now"},
       "timepicker": {},
-      "timezone": "browser",
-      "title": "TaskManager - Logs & Alertes Critiques",
-      "uid": "taskmanager-logs-alerts",
-      "version": 1
+      "timezone": "",
+      "title": "TaskManager - Logs & Alertes (Complet)",
+      "uid": "taskmanager-logs",
+      "version": 4
     }
