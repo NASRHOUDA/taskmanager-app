@@ -68,6 +68,14 @@ data:
             annotations:
               summary: "Déploiement {{ $labels.deployment }} sans pod disponible"
               description: "Le déploiement {{ $labels.deployment }} est à 0 replica disponible depuis 2 minutes."
+          - alert: MicroservicePodDown
+            expr: kube_deployment_status_replicas_available{namespace="microservices", deployment=~"api-gateway|authentication-service|user-service|task-service|notification-service|frontend-microservice"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Microservice {{ $labels.deployment }} sans pod disponible"
+              description: "Le déploiement {{ $labels.deployment }} est à 0 replica disponible depuis 2 minutes."
           - alert: HighCPUUsage
             expr: rate(container_cpu_usage_seconds_total{namespace="taskmanager"}[5m]) > 0.7
             for: 5m
@@ -76,6 +84,14 @@ data:
             annotations:
               summary: "CPU élevé sur {{ $labels.pod }}"
               description: "Utilisation CPU au-dessus de 70% depuis 5 minutes."
+          - alert: MicroserviceHighCPUUsage
+            expr: rate(container_cpu_usage_seconds_total{namespace="microservices"}[5m]) > 0.7
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "CPU élevé sur {{ $labels.pod }} (microservices)"
+              description: "Utilisation CPU au-dessus de 70% depuis 5 minutes."
           - alert: HighMemoryUsage
             expr: container_memory_usage_bytes{namespace="taskmanager"} / container_spec_memory_limit_bytes{namespace="taskmanager"} > 0.85
             for: 5m
@@ -83,6 +99,14 @@ data:
               severity: warning
             annotations:
               summary: "Mémoire élevée sur {{ $labels.pod }}"
+              description: "Utilisation mémoire au-dessus de 85% depuis 5 minutes."
+          - alert: MicroserviceHighMemoryUsage
+            expr: container_memory_usage_bytes{namespace="microservices"} / container_spec_memory_limit_bytes{namespace="microservices"} > 0.85
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Mémoire élevée sur {{ $labels.pod }} (microservices)"
               description: "Utilisation mémoire au-dessus de 85% depuis 5 minutes."
           - alert: HPAMaxedOut
             expr: kube_horizontalpodautoscaler_status_current_replicas >= kube_horizontalpodautoscaler_spec_max_replicas
