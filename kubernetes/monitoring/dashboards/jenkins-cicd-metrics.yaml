@@ -106,12 +106,14 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "default_jenkins_builds_last_build_waiting_milliseconds{jenkins_job=\"taskmanager-pipeline\"}",
+              "expr": "default_jenkins_builds_last_build_waiting_milliseconds and on(jenkins_job) topk(1, default_jenkins_builds_last_build_start_time_milliseconds)",
+              "instant": true,
+              "range": false,
               "legendFormat": "Temps d attente",
               "refId": "A"
             }
           ],
-          "title": "Temps d attente en file (Queue Time)",
+          "title": "Temps d'attente en file (Queue Time)",
           "type": "stat"
         },
         {
@@ -144,7 +146,9 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-              "expr": "default_jenkins_builds_last_build_duration_milliseconds{jenkins_job=\"taskmanager-pipeline\"}\r\nand on(jenkins_job) default_jenkins_builds_last_build_result{jenkins_job=\"taskmanager-pipeline\"} != 3",
+              "expr": "default_jenkins_builds_last_build_duration_milliseconds and on(jenkins_job) topk(1, default_jenkins_builds_last_build_start_time_milliseconds) and on(jenkins_job) default_jenkins_builds_last_build_result_ordinal != 3",
+              "instant": true,
+              "range": false,
               "legendFormat": "Duree build",
               "refId": "A"
             }
@@ -247,5 +251,5 @@ data:
       "timezone": "",
       "title": "Jenkins CI/CD - taskmanager-app",
       "uid": "jenkins-cicd-metrics",
-      "version": 9
+      "version": 11
     }
