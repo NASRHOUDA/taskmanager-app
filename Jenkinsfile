@@ -39,7 +39,7 @@ pipeline {
                     if (lastCommitMsg.contains('[skip ci]')) {
                         echo "⏭️ Commit contient [skip ci] — build arrêté pour éviter une boucle infinie (Update Manifests)."
                         currentBuild.result = 'NOT_BUILT'
-                        error("Build volontairement stoppé : commit [skip ci] détecté.")
+                        error("Build volontairement stoppé : commit [skip ci] détectée.")
                     }
                 }
             }
